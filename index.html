@@ -39,6 +39,9 @@ main{flex:1;padding:14px 14px 44px}
 .row{display:flex;gap:10px}
 .search{width:100%;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:12px 14px;font-size:15px;margin-bottom:12px}
 .lib .song .add{border:1.5px solid var(--accent);color:var(--accent);background:transparent;border-radius:10px;padding:7px 12px;font-weight:700;font-size:13px;flex:0 0 auto;cursor:pointer}
+.idxbar{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.idxbar button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:9px;min-width:36px;padding:8px 6px;font-size:15px;font-weight:800;cursor:pointer;line-height:1}
+.idxbar button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .lib .song.sel .add{background:var(--accent);color:#fff}
 .secttl{font-size:13px;font-weight:800;color:var(--sub);letter-spacing:.05em;margin:20px 4px 10px}
 .mv{display:flex;flex-direction:column;gap:3px;margin-right:2px}
@@ -88,7 +91,7 @@ main{flex:1;padding:14px 14px 44px}
 <div class="toast" id="toast"></div>
 <script>
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1';
-let SONGS=[],BYID={},route='home',CKEY=null,KEYS=null;
+let SONGS=[],BYID={},route='home',CKEY=null,KEYS=null,libGrp=null;
 let dark=load(LS_DARK)||false; if(dark)document.documentElement.classList.add('dark');
 let shared=null;
 let draft=load(LS_DRAFT)||{t:'今週の賛美',s:nextSunday()+' 礼拝',l:[]};
@@ -198,7 +201,7 @@ function renderAdmin(){
       <button class="btn ghost" id="copy" style="margin-top:0;padding:12px">リンクをコピー</button>
       <div style="font-size:11.5px;color:var(--sub);margin-top:9px">LINE等でチームに送るだけ。受け取った人はタップで見られます。</div>
     </div>
-    <div class="secttl">ライブラリ（${SONGS.length}曲）</div><div class="lib" id="libbox"></div>`;
+    <div class="secttl">ライブラリ（${SONGS.length}曲）・頭文字で選ぶ</div><div class="idxbar" id="idxbar"></div><div class="lib" id="libbox"></div>`;
   app.appendChild(m);
   drawSel();drawLib('');
   document.getElementById('back').onclick=()=>{route='home';render()};
@@ -221,12 +224,20 @@ function drawSel(){const box=document.getElementById('selbox');box.innerHTML='';
   box.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>mv(+b.dataset.d,1));
   box.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{draft.l.splice(+b.dataset.r,1);save(LS_DRAFT,draft);drawSel();drawLib(document.getElementById('q').value)});}
 function mv(i,d){const j=i+d;if(j<0||j>=draft.l.length)return;[draft.l[i],draft.l[j]]=[draft.l[j],draft.l[i]];save(LS_DRAFT,draft);drawSel()}
-function drawLib(q){const box=document.getElementById('libbox');if(!box)return;box.innerHTML='';q=(q||'').toLowerCase();let n=0;
-  for(const s of SONGS){if(q&&!s.title.toLowerCase().includes(q))continue;if(++n>400)break;
-    const on=draft.l.includes(s.id);const el=document.createElement('div');el.className='song'+(on?' sel':'');
-    el.innerHTML=`<div class="st"><div class="t">${esc(s.title)}</div><div class="s">${s.pages.length}ページ</div></div><button class="add">${on?'追加済':'＋ 追加'}</button>`;
-    el.querySelector('.add').onclick=()=>{on?draft.l.splice(draft.l.indexOf(s.id),1):draft.l.push(s.id);save(LS_DRAFT,draft);drawSel();drawLib(q)};
-    box.appendChild(el);}}
+function GORD(g){const j='あかさたなはまやらわ'.indexOf(g);if(j>=0)return j;if(g>='A'&&g<='Z')return 10+g.charCodeAt(0)-65;return 99}
+function grpList(){return [...new Set(SONGS.map(s=>s.g))].sort((a,b)=>GORD(a)-GORD(b))}
+function libItem(s){const on=draft.l.includes(s.id);const el=document.createElement('div');el.className='song'+(on?' sel':'');
+  el.innerHTML=`<div class="st"><div class="t">${esc(s.title)}</div><div class="s">${s.pages.length}ページ</div></div><button class="add">${on?'追加済':'＋ 追加'}</button>`;
+  el.querySelector('.add').onclick=()=>{on?draft.l.splice(draft.l.indexOf(s.id),1):draft.l.push(s.id);save(LS_DRAFT,draft);drawSel();drawLib(document.getElementById('q').value)};
+  return el;}
+function drawLib(q){const box=document.getElementById('libbox'),bar=document.getElementById('idxbar');if(!box)return;
+  q=(q||'').trim().toLowerCase();box.innerHTML='';
+  if(q){if(bar)bar.style.display='none';let n=0;
+    for(const s of SONGS){if(!s.title.toLowerCase().includes(q)&&!((s.y||'').includes(q)))continue;if(++n>400)break;box.appendChild(libItem(s));}
+    if(!n)box.innerHTML='<div class="hint">見つかりませんでした</div>';return;}
+  const gs=grpList();if(libGrp==null||!gs.includes(libGrp))libGrp=gs[0];
+  if(bar){bar.style.display='flex';bar.innerHTML='';gs.forEach(g=>{const b=document.createElement('button');b.textContent=g;if(g===libGrp)b.className='on';b.onclick=()=>{libGrp=g;const q2=document.getElementById('q');if(q2)q2.value='';drawLib('')};bar.appendChild(b);});}
+  for(const s of SONGS){if(s.g!==libGrp)continue;box.appendChild(libItem(s));}}
 
 /* ---------- viewer ---------- */
 const V=document.getElementById('viewer');
