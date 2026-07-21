@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="今週の賛美">
+<meta name="theme-color" content="#5b4b8a">
+<title>今週の賛美</title>
+<link rel="icon" href="data:,">
+<style>
+:root{--bg:#f3f0e9;--card:#fff;--ink:#2a2733;--sub:#8a8496;--line:#e7e2d8;--accent:#5b4b8a;--accent2:#c9a94e;--shadow:0 2px 14px rgba(40,30,70,.08)}
+html.dark{--bg:#0c0e18;--card:#171a29;--ink:#eceaf4;--sub:#9a95ac;--line:#252838;--accent:#a48fe0;--accent2:#d8bc6a;--shadow:0 2px 16px rgba(0,0,0,.5)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;background:var(--bg);color:var(--ink);overscroll-behavior:none}
+.wrap{max-width:680px;margin:0 auto;min-height:100%;display:flex;flex-direction:column}
+header.top{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(16px + env(safe-area-inset-top)) 18px 10px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line)}
+.brand{font-size:12px;letter-spacing:.16em;color:var(--accent);font-weight:700}
+.h1{font-size:24px;font-weight:800;margin:3px 0 0;outline:none;min-width:40px}
+.date{font-size:13.5px;color:var(--sub);margin-top:4px;outline:none;min-width:40px}
+.h1[contenteditable]:focus,.date[contenteditable]:focus{border-bottom:2px solid var(--accent)}
+.editbadge{font-size:10.5px;color:var(--sub);border:1px solid var(--line);border-radius:20px;padding:2px 8px;margin-top:6px;display:inline-block}
+.iconbtn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:9px 13px;font-size:14px;font-weight:600;box-shadow:var(--shadow);cursor:pointer;flex:0 0 auto}
+main{flex:1;padding:14px 14px 44px}
+.hint{font-size:12.5px;color:var(--sub);text-align:center;margin:6px 0 14px}
+.song{display:flex;align-items:center;gap:13px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 15px;margin-bottom:11px;box-shadow:var(--shadow);cursor:pointer;transition:transform .07s}
+.song:active{transform:scale(.985)}
+.num{min-width:30px;height:30px;border-radius:9px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex:0 0 auto}
+.st{flex:1;min-width:0}.st .t{font-size:17px;font-weight:700;line-height:1.25}
+.st .s{font-size:12.5px;color:var(--sub);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pg{font-size:11px;color:var(--sub);border:1px solid var(--line);border-radius:20px;padding:3px 9px;flex:0 0 auto}
+.chev{color:var(--sub);font-size:20px;flex:0 0 auto}
+.btn{display:block;width:100%;border:none;border-radius:14px;padding:15px;font-size:16px;font-weight:800;background:var(--accent);color:#fff;box-shadow:var(--shadow);cursor:pointer;margin-top:10px}
+.btn.ghost{background:var(--card);color:var(--accent);border:1.5px solid var(--accent)}
+.btn.gold{background:var(--accent2);color:#3a2f10}
+.btn:disabled{opacity:.5}
+.row{display:flex;gap:10px}
+.search{width:100%;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:12px 14px;font-size:15px;margin-bottom:12px}
+.lib .song .add{border:1.5px solid var(--accent);color:var(--accent);background:transparent;border-radius:10px;padding:7px 12px;font-weight:700;font-size:13px;flex:0 0 auto;cursor:pointer}
+.lib .song.sel .add{background:var(--accent);color:#fff}
+.secttl{font-size:13px;font-weight:800;color:var(--sub);letter-spacing:.05em;margin:20px 4px 10px}
+.mv{display:flex;flex-direction:column;gap:3px;margin-right:2px}
+.mv button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:7px;width:30px;height:22px;font-size:12px;cursor:pointer;padding:0}
+.rm{color:#c0475a;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:7px 10px;font-weight:700;font-size:13px;cursor:pointer}
+.share{background:var(--card);border:1px dashed var(--accent);border-radius:14px;padding:14px;margin-top:12px}
+.share .u{font-size:12.5px;color:var(--accent);word-break:break-all;background:var(--bg);padding:10px 11px;border-radius:9px;margin:9px 0}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:12px 20px;border-radius:30px;font-size:14px;font-weight:700;z-index:60;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.show{opacity:1}
+.center{min-height:70vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--sub);padding:24px;text-align:center}
+.spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+/* unlock */
+.lock{max-width:360px;margin:0 auto;width:100%}
+.lock h2{font-size:20px;font-weight:800;margin:0 0 4px}
+.lock p{font-size:13px;color:var(--sub);margin:0 0 18px;line-height:1.5}
+.lock input{width:100%;border:1.5px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:14px;font-size:17px;text-align:center;letter-spacing:.05em}
+.lock .err{color:#c0475a;font-size:13px;font-weight:700;min-height:18px;margin-top:8px}
+/* viewer (full screen, minimal chrome) */
+.viewer{position:fixed;inset:0;z-index:40;background:var(--bg);display:none;flex-direction:column}
+.viewer.on{display:flex}
+.vtop{display:flex;align-items:center;gap:8px;padding:calc(5px + env(safe-area-inset-top)) 10px 5px;background:var(--bg)}
+.vtop .ti{flex:1;min-width:0;text-align:center}
+.vtop .ti .t{font-size:14px;font-weight:800;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vtop .ti .c{font-size:10.5px;color:var(--sub)}
+.vtop .x{font-size:19px;background:none;border:none;color:var(--ink);cursor:pointer;padding:3px 7px;flex:0 0 auto}
+.stage{flex:1;overflow-y:auto;overflow-x:hidden;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch;background:var(--bg)}
+.slide{height:100%;scroll-snap-align:start;scroll-snap-stop:always;display:flex;align-items:center;justify-content:center;padding:0;position:relative}
+.slide img{max-width:100%;max-height:100%;object-fit:contain;display:block;user-select:none;-webkit-user-drag:none;background:#fff}
+.slide.load::after{content:"";position:absolute;width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite}
+.slide.zoom{overflow:auto;align-items:flex-start;justify-content:flex-start}
+.slide.zoom img{max-width:none;max-height:none;width:190%;object-fit:unset}
+.pageflag{position:absolute;top:7px;right:9px;background:rgba(0,0,0,.5);color:#fff;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;pointer-events:none}
+.vbot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 10px calc(6px + env(safe-area-inset-bottom));background:var(--bg);border-top:1px solid var(--line)}
+.circ{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:20px;font-weight:800;box-shadow:var(--shadow);cursor:pointer;flex:0 0 auto}
+.circ:disabled{opacity:.3}
+.vmid{flex:1;text-align:center;font-size:11px;color:var(--sub);line-height:1.35}
+.vmid b{color:var(--ink);font-size:12.5px}
+.blindbtn{display:inline-block;margin-top:3px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:20px;padding:4px 12px;font-size:11.5px;font-weight:700;cursor:pointer}
+.blindbtn.act{background:#c0475a;color:#fff;border-color:#c0475a}
+.edge{position:absolute;top:0;bottom:0;width:15%;z-index:2}.edge.l{left:0}.edge.r{right:0}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="center"><div class="spin"></div><div>読み込み中…</div></div></div>
+<div class="viewer" id="viewer"></div>
+<div class="toast" id="toast"></div>
+<script>
+const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1';
+let SONGS=[],BYID={},route='home',CKEY=null,KEYS=null;
+let dark=load(LS_DARK)||false; if(dark)document.documentElement.classList.add('dark');
+let shared=null;
+let draft=load(LS_DRAFT)||{t:'今週の賛美',s:nextSunday()+' 礼拝',l:[]};
+let hidden=load(LS_HIDE)||{};
+function load(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
+function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1800)}
+function nextSunday(){const d=new Date();d.setDate(d.getDate()+((7-d.getDay())%7));return `${d.getMonth()+1}月${d.getDate()}日(日)`}
+function esc(t){return(t||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function enc8(s){return new TextEncoder().encode(s)}
+function b64d(s){const b=atob(s);const u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u}
+function b64e(buf){let s='';const u=new Uint8Array(buf);for(let i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);return btoa(s)}
+const app=document.getElementById('app');
+
+/* ---------- crypto ---------- */
+async function deriveKEK(passcode,saltB64,iters){
+  const base=await crypto.subtle.importKey('raw',enc8(passcode),{name:'PBKDF2'},false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64d(saltB64),iterations:iters,hash:'SHA-256'},base,256);
+  return crypto.subtle.importKey('raw',bits,{name:'AES-GCM'},false,['decrypt']);
+}
+async function unlockWith(passcode){
+  const kek=await deriveKEK(passcode,KEYS.salt,KEYS.iters);
+  const w=b64d(KEYS.wrapped);
+  const rawK=await crypto.subtle.decrypt({name:'AES-GCM',iv:w.slice(0,12)},kek,w.slice(12));
+  CKEY=await crypto.subtle.importKey('raw',rawK,{name:'AES-GCM'},false,['decrypt']);
+  save(LS_K,b64e(rawK));
+}
+async function importStoredK(kB64){CKEY=await crypto.subtle.importKey('raw',b64d(kB64),{name:'AES-GCM'},false,['decrypt'])}
+async function decBuf(path){
+  const buf=await (await fetch(path,{cache:'force-cache'})).arrayBuffer();const u=new Uint8Array(buf);
+  return crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(0,12)},CKEY,u.slice(12));
+}
+async function decJSON(path){return JSON.parse(new TextDecoder().decode(await decBuf(path)))}
+const imgCache={};
+async function decImg(path){if(imgCache[path])return imgCache[path];const b=await decBuf(path);const url=URL.createObjectURL(new Blob([b],{type:'image/webp'}));imgCache[path]=url;return url}
+
+/* ---------- boot ---------- */
+(async()=>{
+  try{KEYS=await fetch('keys.json').then(r=>r.json())}catch(e){app.innerHTML='<div class="center">読み込みに失敗しました。</div>';return}
+  const sk=load(LS_K);
+  if(sk){try{await importStoredK(sk);await boot();return}catch(e){}}
+  showUnlock();
+})();
+function showUnlock(msg){
+  app.innerHTML=`<div class="center"><div class="lock">
+    <h2>🔒 合言葉を入力</h2>
+    <p>このアプリはチーム限定です。合言葉はこの端末で最初の1回だけ。次回からは自動で開きます。</p>
+    <input id="pc" type="password" inputmode="text" placeholder="合言葉" autocomplete="off">
+    <div class="err" id="err">${msg||''}</div>
+    <button class="btn" id="go" style="margin-top:14px">開く</button>
+  </div></div>`;
+  const pc=document.getElementById('pc'),go=document.getElementById('go');
+  const tryit=async()=>{go.disabled=true;document.getElementById('err').textContent='確認中…';
+    try{await unlockWith(pc.value.trim());await boot();}
+    catch(e){go.disabled=false;showUnlock('合言葉が違います。もう一度お試しください。');}};
+  go.onclick=tryit; pc.addEventListener('keydown',e=>{if(e.key==='Enter')tryit()}); pc.focus();
+}
+async function boot(){
+  app.innerHTML='<div class="center"><div class="spin"></div><div>展開中…</div></div>';
+  SONGS=await decJSON('data.enc');BYID={};SONGS.forEach(s=>BYID[s.id]=s);
+  shared=parseHash();render();
+  window.addEventListener('hashchange',()=>{shared=parseHash();route='home';render()});
+}
+
+function parseHash(){const h=location.hash.replace(/^#/,'');if(!h)return null;const p=new URLSearchParams(h);const l=(p.get('l')||'').split(',').filter(Boolean);if(!l.length)return null;return{t:decodeURIComponent(p.get('t')||'今週の賛美'),s:decodeURIComponent(p.get('s')||''),l}}
+function buildLink(o){return location.origin+location.pathname+'#t='+encodeURIComponent(o.t)+'&s='+encodeURIComponent(o.s)+'&l='+o.l.join(',')}
+function currentList(){if(shared)return{t:shared.t,s:shared.s,ids:shared.l.filter(id=>BYID[id])};return{t:draft.t,s:draft.s,ids:draft.l.filter(id=>BYID[id])}}
+function render(){route==='admin'?renderAdmin():renderHome()}
+
+function renderHome(){
+  const cur=currentList();const editable=!shared;app.innerHTML='';
+  const h=document.createElement('header');h.className='top';
+  h.innerHTML=`<div style="min-width:0"><div class="brand">WORSHIP SETLIST</div>
+    <div class="h1" ${editable?'contenteditable="true" spellcheck="false" id="etitle"':''}>${esc(cur.t)}</div>
+    <div class="date" ${editable?'contenteditable="true" spellcheck="false" id="esub"':''}>${esc(cur.s)}</div>
+    ${editable?'<div class="editbadge">✎ タイトル・日付はタップで編集</div>':''}</div>
+    <button class="iconbtn" id="toDark">${dark?'☀️':'🌙'}</button>`;
+  app.appendChild(h);
+  const m=document.createElement('main');
+  if(!cur.ids.length){m.innerHTML=`<div class="center" style="min-height:40vh">まだ曲がありません。<br>下の「選曲する」から選んでください。</div>`;}
+  else{m.innerHTML=`<div class="hint">曲をタップ → 全体表示。下スクロールで次ページ</div>`;
+    cur.ids.forEach((id,i)=>{const s=BYID[id];const el=document.createElement('div');el.className='song';
+      el.innerHTML=`<div class="num">${i+1}</div><div class="st"><div class="t">${esc(s.title)}</div></div><div class="pg">${s.pages.length}p</div><div class="chev">›</div>`;
+      el.onclick=()=>openViewer(cur.ids,i);m.appendChild(el);});}
+  if(editable){const b=document.createElement('button');b.className='btn ghost';b.textContent='＋ 選曲する（管理）';b.onclick=()=>{route='admin';render()};m.appendChild(b);}
+  else{const b=document.createElement('div');b.className='hint';b.style.marginTop='18px';b.textContent='共有された今週の賛美リストです';m.appendChild(b);}
+  app.appendChild(m);
+  document.getElementById('toDark').onclick=toggleDark;
+  if(editable){const et=document.getElementById('etitle'),es=document.getElementById('esub');
+    const commit=()=>{draft.t=et.textContent.trim()||'今週の賛美';draft.s=es.textContent.trim();save(LS_DRAFT,draft)};
+    et.addEventListener('blur',commit);es.addEventListener('blur',commit);
+    [et,es].forEach(x=>x.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();x.blur()}}));}
+}
+
+function renderAdmin(){
+  app.innerHTML='';
+  const h=document.createElement('header');h.className='top';
+  h.innerHTML=`<div><div class="brand">MANAGE</div><div class="h1">選曲する</div><div class="date">曲を選んで共有リンクを作成</div></div><button class="iconbtn" id="back">‹ 戻る</button>`;
+  app.appendChild(h);
+  const m=document.createElement('main');
+  m.innerHTML=`<input class="search" id="q" placeholder="曲名で検索（例：Way / 御名 / Amazing）">
+    <div class="secttl">今週のセット（<span id="cnt">${draft.l.length}</span>曲）</div><div id="selbox"></div>
+    <button class="btn gold" id="mklink">共有リンクを作成</button>
+    <div class="share" id="sharebox" style="display:none">
+      <div style="font-size:13px;font-weight:800">チーム共有リンク</div>
+      <div class="u" id="shareu"></div>
+      <button class="btn ghost" id="copy" style="margin-top:0;padding:12px">リンクをコピー</button>
+      <div style="font-size:11.5px;color:var(--sub);margin-top:9px">LINE等でチームに送るだけ。受け取った人はタップで見られます。</div>
+    </div>
+    <div class="secttl">ライブラリ（${SONGS.length}曲）</div><div class="lib" id="libbox"></div>`;
+  app.appendChild(m);
+  drawSel();drawLib('');
+  document.getElementById('back').onclick=()=>{route='home';render()};
+  document.getElementById('q').oninput=e=>drawLib(e.target.value);
+  document.getElementById('mklink').onclick=makeLink;
+  document.getElementById('copy').onclick=()=>{const u=document.getElementById('shareu').textContent;navigator.clipboard&&navigator.clipboard.writeText(u).then(()=>toast('コピーしました'),()=>toast('長押しでコピーしてください'))};
+}
+function makeLink(){
+  if(!draft.l.length){toast('曲を選んでください');return}
+  save(LS_DRAFT,draft);
+  document.getElementById('shareu').textContent=buildLink({t:draft.t,s:draft.s,l:draft.l});
+  const sb=document.getElementById('sharebox');sb.style.display='block';sb.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function drawSel(){const box=document.getElementById('selbox');box.innerHTML='';const c=document.getElementById('cnt');if(c)c.textContent=draft.l.length;
+  if(!draft.l.length){box.innerHTML='<div class="hint">まだ曲がありません。下のライブラリから追加してください。</div>';return}
+  draft.l.forEach((id,i)=>{const s=BYID[id];if(!s)return;const el=document.createElement('div');el.className='song';
+    el.innerHTML=`<div class="mv"><button data-u="${i}">▲</button><button data-d="${i}">▼</button></div><div class="num">${i+1}</div><div class="st"><div class="t">${esc(s.title)}</div></div><button class="rm" data-r="${i}">外す</button>`;
+    box.appendChild(el);});
+  box.querySelectorAll('[data-u]').forEach(b=>b.onclick=()=>mv(+b.dataset.u,-1));
+  box.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>mv(+b.dataset.d,1));
+  box.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{draft.l.splice(+b.dataset.r,1);save(LS_DRAFT,draft);drawSel();drawLib(document.getElementById('q').value)});}
+function mv(i,d){const j=i+d;if(j<0||j>=draft.l.length)return;[draft.l[i],draft.l[j]]=[draft.l[j],draft.l[i]];save(LS_DRAFT,draft);drawSel()}
+function drawLib(q){const box=document.getElementById('libbox');if(!box)return;box.innerHTML='';q=(q||'').toLowerCase();let n=0;
+  for(const s of SONGS){if(q&&!s.title.toLowerCase().includes(q))continue;if(++n>400)break;
+    const on=draft.l.includes(s.id);const el=document.createElement('div');el.className='song'+(on?' sel':'');
+    el.innerHTML=`<div class="st"><div class="t">${esc(s.title)}</div><div class="s">${s.pages.length}ページ</div></div><button class="add">${on?'追加済':'＋ 追加'}</button>`;
+    el.querySelector('.add').onclick=()=>{on?draft.l.splice(draft.l.indexOf(s.id),1):draft.l.push(s.id);save(LS_DRAFT,draft);drawSel();drawLib(q)};
+    box.appendChild(el);}}
+
+/* ---------- viewer ---------- */
+const V=document.getElementById('viewer');
+let vIds=[],vSong=0,activeVis=0;
+function cur(){return BYID[vIds[vSong]]}
+function visList(s){const h=hidden[s.id]||[];return s.pages.map((_,i)=>i).filter(i=>!h.includes(i))}
+function openViewer(ids,idx){vIds=ids;vSong=idx;buildViewer();V.classList.add('on');preload(idx+1)}
+function closeViewer(){V.classList.remove('on')}
+async function preload(i){const s=BYID[vIds[i]];if(!s)return;for(const p of s.pages){try{await decImg(p)}catch(e){}}}
+function buildViewer(){
+  const s=cur();const vis=visList(s);activeVis=0;
+  const nHidden=(hidden[s.id]||[]).length;
+  let slides;
+  if(!vis.length){slides=`<div class="slide"><div style="text-align:center;color:var(--sub);font-size:13px">全ページ非表示中<br><button class="blindbtn" id="restoreAll">↺ 全ページを表示</button></div></div>`;}
+  else{slides=vis.map((pi,k)=>`<div class="slide load"><img data-enc="${s.pages[pi]}" alt="">${s.pages.length>1?`<div class="pageflag">${pi+1} / ${s.pages.length}</div>`:''}</div>`).join('');}
+  V.innerHTML=`<div class="vtop"><button class="x" id="vx">✕</button>
+     <div class="ti"><div class="t">${esc(s.title)}</div><div class="c">${vSong+1} / ${vIds.length} 曲</div></div>
+     <button class="x" id="vdark">${dark?'☀️':'🌙'}</button></div>
+   <div class="stage" id="stage">${slides}<div class="edge l" id="el"></div><div class="edge r" id="er"></div></div>
+   <div class="vbot"><button class="circ" id="prevS">‹</button>
+     <div class="vmid"><b>${vSong+1} / ${vIds.length} 曲</b><br>
+       <span id="blindLine">${vis.length?`<span class="blindbtn" id="blind">🚫 このページを隠す</span>`:''}${nHidden?` <span class="blindbtn" id="restore">↺ ${nHidden}枚戻す</span>`:''}</span>
+     </div>
+     <button class="circ" id="nextS">›</button></div>`;
+  const stage=document.getElementById('stage');stage.scrollTop=0;
+  hydrate();
+  document.getElementById('vx').onclick=closeViewer;
+  document.getElementById('vdark').onclick=()=>{toggleDark();const b=document.getElementById('vdark');if(b)b.textContent=dark?'☀️':'🌙'};
+  const pS=document.getElementById('prevS'),nS=document.getElementById('nextS');
+  pS.disabled=vSong===0;nS.disabled=vSong===vIds.length-1;
+  pS.onclick=()=>go(vSong-1);nS.onclick=()=>go(vSong+1);
+  document.getElementById('el').onclick=()=>go(vSong-1);
+  document.getElementById('er').onclick=()=>go(vSong+1);
+  const blind=document.getElementById('blind');if(blind)blind.onclick=hideActive;
+  const restore=document.getElementById('restore');if(restore)restore.onclick=()=>{delete hidden[s.id];save(LS_HIDE,hidden);buildViewer()};
+  const ra=document.getElementById('restoreAll');if(ra)ra.onclick=()=>{delete hidden[s.id];save(LS_HIDE,hidden);buildViewer()};
+  // track active page
+  stage.addEventListener('scroll',()=>{const h=stage.clientHeight||1;activeVis=Math.round(stage.scrollTop/h)},{passive:true});
+  // double-tap zoom
+  stage.querySelectorAll('img').forEach(img=>img.addEventListener('click',()=>{const n=Date.now();if(n-(img._lt||0)<300)zoom(img);img._lt=n}));
+  // swipe song
+  let sx=0,sy=0;
+  stage.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
+  stage.addEventListener('touchend',e=>{if(stage.querySelector('.slide.zoom'))return;const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.6)go(vSong+(dx<0?1:-1))},{passive:true});
+}
+async function hydrate(){const imgs=[...document.querySelectorAll('#stage img[data-enc]')];for(const im of imgs){const p=im.getAttribute('data-enc');try{im.src=await decImg(p);im.parentElement.classList.remove('load')}catch(e){}im.removeAttribute('data-enc')}}
+function hideActive(){const s=cur();const vis=visList(s);const orig=vis[Math.max(0,Math.min(vis.length-1,activeVis))];if(orig==null)return;(hidden[s.id]=hidden[s.id]||[]).push(orig);save(LS_HIDE,hidden);toast('このページを非表示にしました');buildViewer()}
+function go(i){if(i<0||i>=vIds.length)return;vSong=i;buildViewer();preload(i+1)}
+function zoom(img){const sl=img.parentElement,st=document.getElementById('stage');if(sl.classList.toggle('zoom')){st.style.scrollSnapType='none'}else{st.style.scrollSnapType='y mandatory';sl.scrollTop=0;sl.scrollLeft=0}}
+function toggleDark(){dark=!dark;document.documentElement.classList.toggle('dark',dark);save(LS_DARK,dark);const b=document.getElementById('toDark');if(b)b.textContent=dark?'☀️':'🌙'}
+</script>
+</body>
+</html>
