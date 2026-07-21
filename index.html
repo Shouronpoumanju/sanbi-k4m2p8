@@ -120,11 +120,11 @@ async function unlockWith(passcode){
   save(LS_K,b64e(rawK));
 }
 async function importStoredK(kB64){CKEY=await crypto.subtle.importKey('raw',b64d(kB64),{name:'AES-GCM'},false,['decrypt'])}
-async function decBuf(path){
-  const buf=await (await fetch(path,{cache:'force-cache'})).arrayBuffer();const u=new Uint8Array(buf);
+async function decBuf(path,fresh){
+  const buf=await (await fetch(path,{cache:fresh?'no-cache':'force-cache'})).arrayBuffer();const u=new Uint8Array(buf);
   return crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(0,12)},CKEY,u.slice(12));
 }
-async function decJSON(path){return JSON.parse(new TextDecoder().decode(await decBuf(path)))}
+async function decJSON(path){return JSON.parse(new TextDecoder().decode(await decBuf(path,true)))}
 const imgCache={};
 async function decImg(path){if(imgCache[path])return imgCache[path];const b=await decBuf(path);const url=URL.createObjectURL(new Blob([b],{type:'image/webp'}));imgCache[path]=url;return url}
 
