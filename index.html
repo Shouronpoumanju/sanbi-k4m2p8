@@ -60,28 +60,18 @@ main{flex:1;padding:14px 14px 44px}
 .lock p{font-size:13px;color:var(--sub);margin:0 0 18px;line-height:1.5}
 .lock input{width:100%;border:1.5px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:14px;font-size:17px;text-align:center;letter-spacing:.05em}
 .lock .err{color:#c0475a;font-size:13px;font-weight:700;min-height:18px;margin-top:8px}
-/* viewer (full screen, minimal chrome) */
+/* viewer (full screen, zero chrome) */
 .viewer{position:fixed;inset:0;z-index:40;background:var(--bg);display:none;flex-direction:column}
 .viewer.on{display:flex}
-.vtop{display:flex;align-items:center;gap:8px;padding:calc(5px + env(safe-area-inset-top)) 10px 5px;background:var(--bg)}
-.vtop .ti{flex:1;min-width:0;text-align:center}
-.vtop .ti .t{font-size:14px;font-weight:800;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.vtop .ti .c{font-size:10.5px;color:var(--sub)}
-.vtop .x{font-size:19px;background:none;border:none;color:var(--ink);cursor:pointer;padding:3px 7px;flex:0 0 auto}
+.vclose{position:absolute;top:calc(8px + env(safe-area-inset-top));left:10px;z-index:6;width:42px;height:42px;border-radius:50%;border:none;background:rgba(20,18,30,.45);color:#fff;font-size:19px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);padding:0}
 .stage{flex:1;overflow-y:auto;overflow-x:hidden;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch;background:var(--bg)}
-.slide{height:100%;scroll-snap-align:start;scroll-snap-stop:always;display:flex;align-items:center;justify-content:center;padding:0;position:relative}
-.slide img{max-width:100%;max-height:100%;object-fit:contain;display:block;user-select:none;-webkit-user-drag:none;background:#fff}
-.slide.load::after{content:"";position:absolute;width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite}
-.slide.zoom{overflow:auto;align-items:flex-start;justify-content:flex-start}
+.slide{scroll-snap-align:start;scroll-snap-stop:always;padding:0;position:relative;background:var(--bg)}
+.slide img{width:100%;height:auto;display:block;user-select:none;-webkit-user-drag:none;background:#fff}
+.slide.load{min-height:100%}
+.slide.load::after{content:"";position:absolute;left:50%;top:50%;margin:-15px 0 0 -15px;width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite}
+.slide.zoom{overflow:auto}
 .slide.zoom img{max-width:none;max-height:none;width:190%;object-fit:unset}
-.pageflag{position:absolute;top:7px;right:9px;background:rgba(0,0,0,.5);color:#fff;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;pointer-events:none}
-.vbot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 10px calc(6px + env(safe-area-inset-bottom));background:var(--bg);border-top:1px solid var(--line)}
-.circ{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:20px;font-weight:800;box-shadow:var(--shadow);cursor:pointer;flex:0 0 auto}
-.circ:disabled{opacity:.3}
-.vmid{flex:1;text-align:center;font-size:11px;color:var(--sub);line-height:1.35}
-.vmid b{color:var(--ink);font-size:12.5px}
-.blindbtn{display:inline-block;margin-top:3px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:20px;padding:4px 12px;font-size:11.5px;font-weight:700;cursor:pointer}
-.blindbtn.act{background:#c0475a;color:#fff;border-color:#c0475a}
+.pageflag{position:absolute;top:calc(7px + env(safe-area-inset-top));right:9px;background:rgba(0,0,0,.5);color:#fff;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;pointer-events:none;z-index:3}
 .edge{position:absolute;top:0;bottom:0;width:15%;z-index:2}.edge.l{left:0}.edge.r{right:0}
 </style>
 </head>
@@ -95,7 +85,6 @@ let SONGS=[],BYID={},route='home',CKEY=null,KEYS=null,libGrp=null;
 let dark=load(LS_DARK)||false; if(dark)document.documentElement.classList.add('dark');
 let shared=null;
 let draft=load(LS_DRAFT)||{t:'今週の賛美',s:nextSunday()+' 礼拝',l:[]};
-let hidden=load(LS_HIDE)||{};
 function load(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
 function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1800)}
@@ -156,12 +145,13 @@ async function boot(){
   window.addEventListener('hashchange',()=>{shared=parseHash();route='home';render()});
 }
 
-function parseHash(){const h=location.hash.replace(/^#/,'');if(!h)return null;const p=new URLSearchParams(h);const l=(p.get('l')||'').split(',').filter(Boolean);if(!l.length)return null;return{t:decodeURIComponent(p.get('t')||'今週の賛美'),s:decodeURIComponent(p.get('s')||''),l}}
-function buildLink(o){return location.origin+location.pathname+'#t='+encodeURIComponent(o.t)+'&s='+encodeURIComponent(o.s)+'&l='+o.l.join(',')}
+function parseHash(){const h=location.hash.replace(/^#/,'');if(!h)return null;const p=new URLSearchParams(h);const l=(p.get('l')||'').split(',').filter(Boolean);if(!l.length)return null;const d=+(p.get('d')||0);if(!d||Date.now()-d>604800000)return{expired:true};return{t:decodeURIComponent(p.get('t')||'今週の賛美'),s:decodeURIComponent(p.get('s')||''),l}}
+function buildLink(o){return location.origin+location.pathname+'#t='+encodeURIComponent(o.t)+'&s='+encodeURIComponent(o.s)+'&l='+o.l.join(',')+'&d='+Date.now()}
 function currentList(){if(shared)return{t:shared.t,s:shared.s,ids:shared.l.filter(id=>BYID[id])};return{t:draft.t,s:draft.s,ids:draft.l.filter(id=>BYID[id])}}
 function render(){route==='admin'?renderAdmin():renderHome()}
 
 function renderHome(){
+  if(shared&&shared.expired){app.innerHTML='<div class="center"><div style="font-size:40px">\u23f3</div><div style="font-size:18px;font-weight:800;color:var(--ink)">\u3053\u306e\u5171\u6709\u30ea\u30f3\u30af\u306f\u671f\u9650\u5207\u308c\u3067\u3059</div><div>\u5171\u6709\u30ea\u30f3\u30af\u306f\u4f5c\u6210\u304b\u30891\u9031\u9593\u3067\u81ea\u52d5\u7684\u306b\u7121\u52b9\u306b\u306a\u308a\u307e\u3059\u3002<br>\u65b0\u3057\u3044\u30ea\u30f3\u30af\u3092\u9001\u3063\u3066\u3082\u3089\u3063\u3066\u304f\u3060\u3055\u3044\u3002</div></div>';return}
   const cur=currentList();const editable=!shared;app.innerHTML='';
   const h=document.createElement('header');h.className='top';
   h.innerHTML=`<div style="min-width:0"><div class="brand">WORSHIP SETLIST</div>
@@ -241,41 +231,21 @@ function drawLib(q){const box=document.getElementById('libbox'),bar=document.get
 
 /* ---------- viewer ---------- */
 const V=document.getElementById('viewer');
-let vIds=[],vSong=0,activeVis=0;
+let vIds=[],vSong=0;
 function cur(){return BYID[vIds[vSong]]}
-function visList(s){const h=hidden[s.id]||[];return s.pages.map((_,i)=>i).filter(i=>!h.includes(i))}
 function openViewer(ids,idx){vIds=ids;vSong=idx;buildViewer();V.classList.add('on');preload(idx+1)}
 function closeViewer(){V.classList.remove('on')}
 async function preload(i){const s=BYID[vIds[i]];if(!s)return;for(const p of s.pages){try{await decImg(p)}catch(e){}}}
 function buildViewer(){
-  const s=cur();const vis=visList(s);activeVis=0;
-  const nHidden=(hidden[s.id]||[]).length;
-  let slides;
-  if(!vis.length){slides=`<div class="slide"><div style="text-align:center;color:var(--sub);font-size:13px">全ページ非表示中<br><button class="blindbtn" id="restoreAll">↺ 全ページを表示</button></div></div>`;}
-  else{slides=vis.map((pi,k)=>`<div class="slide load"><img data-enc="${s.pages[pi]}" alt="">${s.pages.length>1?`<div class="pageflag">${pi+1} / ${s.pages.length}</div>`:''}</div>`).join('');}
-  V.innerHTML=`<div class="vtop"><button class="x" id="vx">✕</button>
-     <div class="ti"><div class="t">${esc(s.title)}</div><div class="c">${vSong+1} / ${vIds.length} 曲</div></div>
-     <button class="x" id="vdark">${dark?'☀️':'🌙'}</button></div>
-   <div class="stage" id="stage">${slides}<div class="edge l" id="el"></div><div class="edge r" id="er"></div></div>
-   <div class="vbot"><button class="circ" id="prevS">‹</button>
-     <div class="vmid"><b>${vSong+1} / ${vIds.length} 曲</b><br>
-       <span id="blindLine">${vis.length?`<span class="blindbtn" id="blind">🚫 このページを隠す</span>`:''}${nHidden?` <span class="blindbtn" id="restore">↺ ${nHidden}枚戻す</span>`:''}</span>
-     </div>
-     <button class="circ" id="nextS">›</button></div>`;
+  const s=cur();
+  const slides=s.pages.map((p,pi)=>`<div class="slide load"><img data-enc="${p}" alt="">${s.pages.length>1?`<div class="pageflag">${pi+1} / ${s.pages.length}</div>`:''}</div>`).join('');
+  V.innerHTML=`<div class="stage" id="stage">${slides}<div class="edge l" id="el"></div><div class="edge r" id="er"></div></div>
+   <button class="vclose" id="vx" aria-label="閉じる">✕</button>`;
   const stage=document.getElementById('stage');stage.scrollTop=0;
   hydrate();
-  document.getElementById('vx').onclick=closeViewer;
-  document.getElementById('vdark').onclick=()=>{toggleDark();const b=document.getElementById('vdark');if(b)b.textContent=dark?'☀️':'🌙'};
-  const pS=document.getElementById('prevS'),nS=document.getElementById('nextS');
-  pS.disabled=vSong===0;nS.disabled=vSong===vIds.length-1;
-  pS.onclick=()=>go(vSong-1);nS.onclick=()=>go(vSong+1);
+  document.getElementById('vx').onclick=e=>{e.stopPropagation();closeViewer()};
   document.getElementById('el').onclick=()=>go(vSong-1);
   document.getElementById('er').onclick=()=>go(vSong+1);
-  const blind=document.getElementById('blind');if(blind)blind.onclick=hideActive;
-  const restore=document.getElementById('restore');if(restore)restore.onclick=()=>{delete hidden[s.id];save(LS_HIDE,hidden);buildViewer()};
-  const ra=document.getElementById('restoreAll');if(ra)ra.onclick=()=>{delete hidden[s.id];save(LS_HIDE,hidden);buildViewer()};
-  // track active page
-  stage.addEventListener('scroll',()=>{const h=stage.clientHeight||1;activeVis=Math.round(stage.scrollTop/h)},{passive:true});
   // double-tap zoom
   stage.querySelectorAll('img').forEach(img=>img.addEventListener('click',()=>{const n=Date.now();if(n-(img._lt||0)<300)zoom(img);img._lt=n}));
   // swipe song
@@ -284,7 +254,6 @@ function buildViewer(){
   stage.addEventListener('touchend',e=>{if(stage.querySelector('.slide.zoom'))return;const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.6)go(vSong+(dx<0?1:-1))},{passive:true});
 }
 async function hydrate(){const imgs=[...document.querySelectorAll('#stage img[data-enc]')];for(const im of imgs){const p=im.getAttribute('data-enc');try{im.src=await decImg(p);im.parentElement.classList.remove('load')}catch(e){}im.removeAttribute('data-enc')}}
-function hideActive(){const s=cur();const vis=visList(s);const orig=vis[Math.max(0,Math.min(vis.length-1,activeVis))];if(orig==null)return;(hidden[s.id]=hidden[s.id]||[]).push(orig);save(LS_HIDE,hidden);toast('このページを非表示にしました');buildViewer()}
 function go(i){if(i<0||i>=vIds.length)return;vSong=i;buildViewer();preload(i+1)}
 function zoom(img){const sl=img.parentElement,st=document.getElementById('stage');if(sl.classList.toggle('zoom')){st.style.scrollSnapType='none'}else{st.style.scrollSnapType='y mandatory';sl.scrollTop=0;sl.scrollLeft=0}}
 function toggleDark(){dark=!dark;document.documentElement.classList.toggle('dark',dark);save(LS_DARK,dark);const b=document.getElementById('toDark');if(b)b.textContent=dark?'☀️':'🌙'}
