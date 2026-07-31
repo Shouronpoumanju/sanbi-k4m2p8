@@ -63,7 +63,9 @@ main{flex:1;padding:14px 14px 44px}
 /* viewer (full screen, zero chrome) */
 .viewer{position:fixed;inset:0;z-index:40;background:var(--bg);display:none;flex-direction:column}
 .viewer.on{display:flex}
-.vclose{position:absolute;top:calc(8px + env(safe-area-inset-top));left:10px;z-index:6;width:42px;height:42px;border-radius:50%;border:none;background:rgba(20,18,30,.45);color:#fff;font-size:19px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);padding:0}
+.vclose{position:absolute;top:calc(8px + env(safe-area-inset-top));left:10px;z-index:6;width:34px;height:34px;border-radius:50%;border:none;background:rgba(20,18,30,.26);color:rgba(255,255,255,.92);font-size:15px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);padding:0;transition:opacity .35s}
+.vclose.hid{opacity:0;pointer-events:none}
+.pv{border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:9px;padding:6px 9px;font-size:12px;font-weight:700;cursor:pointer;flex:0 0 auto}
 .stage{flex:1;overflow-y:auto;overflow-x:hidden;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch;background:var(--bg)}
 .slide{scroll-snap-align:start;scroll-snap-stop:always;padding:0;position:relative;background:var(--bg)}
 .slide img{width:100%;height:auto;display:block;user-select:none;-webkit-user-drag:none;background:#fff}
@@ -80,7 +82,9 @@ main{flex:1;padding:14px 14px 44px}
 <div class="viewer" id="viewer"></div>
 <div class="toast" id="toast"></div>
 <script>
-const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1';
+const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
+const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
+let PUB=null;
 let SONGS=[],BYID={},route='home',CKEY=null,KEYS=null,libGrp=null;
 let dark=load(LS_DARK)||false; if(dark)document.documentElement.classList.add('dark');
 let shared=null;
@@ -105,10 +109,10 @@ async function unlockWith(passcode){
   const kek=await deriveKEK(passcode,KEYS.salt,KEYS.iters);
   const w=b64d(KEYS.wrapped);
   const rawK=await crypto.subtle.decrypt({name:'AES-GCM',iv:w.slice(0,12)},kek,w.slice(12));
-  CKEY=await crypto.subtle.importKey('raw',rawK,{name:'AES-GCM'},false,['decrypt']);
+  CKEY=await crypto.subtle.importKey('raw',rawK,{name:'AES-GCM'},false,['encrypt','decrypt']);
   save(LS_K,b64e(rawK));
 }
-async function importStoredK(kB64){CKEY=await crypto.subtle.importKey('raw',b64d(kB64),{name:'AES-GCM'},false,['decrypt'])}
+async function importStoredK(kB64){CKEY=await crypto.subtle.importKey('raw',b64d(kB64),{name:'AES-GCM'},false,['encrypt','decrypt'])}
 async function decBuf(path,fresh){
   const buf=await (await fetch(path,{cache:fresh?'no-cache':'force-cache'})).arrayBuffer();const u=new Uint8Array(buf);
   return crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(0,12)},CKEY,u.slice(12));
@@ -141,83 +145,127 @@ function showUnlock(msg){
 async function boot(){
   app.innerHTML='<div class="center"><div class="spin"></div><div>展開中…</div></div>';
   SONGS=await decJSON('data.enc');BYID={};SONGS.forEach(s=>BYID[s.id]=s);
+  PUB=await fetchPub();
   shared=parseHash();render();
   window.addEventListener('hashchange',()=>{shared=parseHash();route='home';render()});
 }
 
 function parseHash(){const h=location.hash.replace(/^#/,'');if(!h)return null;const p=new URLSearchParams(h);const l=(p.get('l')||'').split(',').filter(Boolean);if(!l.length)return null;const d=+(p.get('d')||0);if(!d||Date.now()-d>604800000)return{expired:true};return{t:decodeURIComponent(p.get('t')||'今週の賛美'),s:decodeURIComponent(p.get('s')||''),l}}
 function buildLink(o){return location.origin+location.pathname+'#t='+encodeURIComponent(o.t)+'&s='+encodeURIComponent(o.s)+'&l='+o.l.join(',')+'&d='+Date.now()}
-function currentList(){if(shared)return{t:shared.t,s:shared.s,ids:shared.l.filter(id=>BYID[id])};return{t:draft.t,s:draft.s,ids:draft.l.filter(id=>BYID[id])}}
+async function fetchPub(){
+  let u=null;
+  try{const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),6000);
+    const r=await fetch(REPO_API+'?ref=main&cb='+Date.now(),{headers:{'Accept':'application/vnd.github.raw'},cache:'no-store',signal:ac.signal});clearTimeout(tm);
+    if(r.ok)u=new Uint8Array(await r.arrayBuffer());}catch(e){}
+  if(!u){try{const r2=await fetch('setlist.enc',{cache:'no-cache'});if(r2.ok)u=new Uint8Array(await r2.arrayBuffer());}catch(e){}}
+  if(!u||u.length<13)return null;
+  try{const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(0,12)},CKEY,u.slice(12));
+    const o=JSON.parse(new TextDecoder().decode(pt));
+    if(!o.d||Date.now()-o.d>604800000)return null;
+    if(!o.l||!o.l.length)return null;
+    return o;}catch(e){return null}
+}
+async function publish(){
+  const pat=load(LS_PAT);
+  const btn=document.getElementById('pub');
+  if(!pat){toast('先に下の「配信設定」でトークンを保存してください');const p=document.getElementById('pat');if(p)p.scrollIntoView({behavior:'smooth',block:'center'});return}
+  if(!draft.l.length){toast('曲を選んでください');return}
+  if(btn){btn.disabled=true;btn.textContent='配信中…'}
+  try{
+    const ek=await crypto.subtle.importKey('raw',b64d(load(LS_K)),{name:'AES-GCM'},false,['encrypt']);
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},ek,enc8(JSON.stringify({t:draft.t,s:draft.s,l:draft.l,d:Date.now()}))));
+    const full=new Uint8Array(12+ct.length);full.set(iv);full.set(ct,12);
+    const H={'Authorization':'Bearer '+pat,'Accept':'application/vnd.github+json'};
+    let sha=null;
+    try{const r=await fetch(REPO_API+'?ref=main&cb='+Date.now(),{headers:H,cache:'no-store'});if(r.ok)sha=(await r.json()).sha}catch(e){}
+    const res=await fetch(REPO_API,{method:'PUT',headers:H,body:JSON.stringify(Object.assign({message:'setlist update',content:b64e(full.buffer),branch:'main'},sha?{sha:sha}:{}))});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    PUB={t:draft.t,s:draft.s,l:draft.l.slice(),d:Date.now()};
+    toast('配信しました！全員に反映されます');
+    const st=document.getElementById('pubstate');if(st)st.textContent='配信中：'+draft.t+'（'+draft.l.length+'曲）';
+  }catch(e){toast('配信に失敗しました：'+e.message)}
+  if(btn){btn.disabled=false;btn.textContent='📡 配信する／変更を反映'}
+}
+function currentList(){if(shared)return{t:shared.t,s:shared.s,ids:shared.l.filter(id=>BYID[id])};if(PUB)return{t:PUB.t,s:PUB.s,ids:PUB.l.filter(id=>BYID[id])};return null}
 function render(){route==='admin'?renderAdmin():renderHome()}
 
 function renderHome(){
   if(shared&&shared.expired){app.innerHTML='<div class="center"><div style="font-size:40px">\u23f3</div><div style="font-size:18px;font-weight:800;color:var(--ink)">\u3053\u306e\u5171\u6709\u30ea\u30f3\u30af\u306f\u671f\u9650\u5207\u308c\u3067\u3059</div><div>\u5171\u6709\u30ea\u30f3\u30af\u306f\u4f5c\u6210\u304b\u30891\u9031\u9593\u3067\u81ea\u52d5\u7684\u306b\u7121\u52b9\u306b\u306a\u308a\u307e\u3059\u3002<br>\u65b0\u3057\u3044\u30ea\u30f3\u30af\u3092\u9001\u3063\u3066\u3082\u3089\u3063\u3066\u304f\u3060\u3055\u3044\u3002</div></div>';return}
-  const cur=currentList();const editable=!shared;app.innerHTML='';
+  const cur=currentList();app.innerHTML='';
   const h=document.createElement('header');h.className='top';
   h.innerHTML=`<div style="min-width:0"><div class="brand">WORSHIP SETLIST</div>
-    <div class="h1" ${editable?'contenteditable="true" spellcheck="false" id="etitle"':''}>${esc(cur.t)}</div>
-    <div class="date" ${editable?'contenteditable="true" spellcheck="false" id="esub"':''}>${esc(cur.s)}</div>
-    ${editable?'<div class="editbadge">✎ タイトル・日付はタップで編集</div>':''}</div>
+    <div class="h1">${esc(cur?cur.t:'今週の賛美')}</div>
+    <div class="date">${esc(cur?cur.s:'')}</div></div>
     <button class="iconbtn" id="toDark">${dark?'☀️':'🌙'}</button>`;
   app.appendChild(h);
   const m=document.createElement('main');
-  if(!cur.ids.length){m.innerHTML=`<div class="center" style="min-height:40vh">まだ曲がありません。<br>下の「選曲する」から選んでください。</div>`;}
+  if(!cur){m.innerHTML=`<div class="center" style="min-height:40vh">今週の賛美はまだ配信されていません。</div>`;}
+  else if(!cur.ids.length){m.innerHTML=`<div class="center" style="min-height:40vh">まだ曲がありません。</div>`;}
   else{m.innerHTML=`<div class="hint">曲をタップ → 全体表示。下スクロールで次ページ</div>`;
     cur.ids.forEach((id,i)=>{const s=BYID[id];const el=document.createElement('div');el.className='song';
       el.innerHTML=`<div class="num">${i+1}</div><div class="st"><div class="t">${esc(s.title)}</div></div><div class="pg">${s.pages.length}p</div><div class="chev">›</div>`;
       el.onclick=()=>openViewer(cur.ids,i);m.appendChild(el);});}
-  if(editable){const b=document.createElement('button');b.className='btn ghost';b.textContent='＋ 選曲する（管理）';b.onclick=()=>{route='admin';render()};m.appendChild(b);}
-  else{const b=document.createElement('div');b.className='hint';b.style.marginTop='18px';b.textContent='共有された今週の賛美リストです';m.appendChild(b);}
+  if(!shared){const b=document.createElement('button');b.className='btn ghost';b.textContent='＋ 選曲する（管理）';b.onclick=()=>{route='admin';render()};m.appendChild(b);}
   app.appendChild(m);
   document.getElementById('toDark').onclick=toggleDark;
-  if(editable){const et=document.getElementById('etitle'),es=document.getElementById('esub');
-    const commit=()=>{draft.t=et.textContent.trim()||'今週の賛美';draft.s=es.textContent.trim();save(LS_DRAFT,draft)};
-    et.addEventListener('blur',commit);es.addEventListener('blur',commit);
-    [et,es].forEach(x=>x.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();x.blur()}}));}
 }
 
 function renderAdmin(){
   app.innerHTML='';
   const h=document.createElement('header');h.className='top';
-  h.innerHTML=`<div><div class="brand">MANAGE</div><div class="h1">選曲する</div><div class="date">曲を選んで共有リンクを作成</div></div><button class="iconbtn" id="back">‹ 戻る</button>`;
+  h.innerHTML=`<div style="min-width:0"><div class="brand">MANAGE</div>
+    <div class="h1" contenteditable="true" spellcheck="false" id="etitle">${esc(draft.t)}</div>
+    <div class="date" contenteditable="true" spellcheck="false" id="esub">${esc(draft.s)}</div>
+    <div class="editbadge">✎ タイトル・日付はタップで編集</div></div>
+    <button class="iconbtn" id="back">‹ 戻る</button>`;
   app.appendChild(h);
   const m=document.createElement('main');
   m.innerHTML=`<input class="search" id="q" placeholder="曲名で検索（例：Way / 御名 / Amazing）">
-    <div class="secttl">今週のセット（<span id="cnt">${draft.l.length}</span>曲）</div><div id="selbox"></div>
-    <button class="btn gold" id="mklink">共有リンクを作成</button>
-    <div class="share" id="sharebox" style="display:none">
-      <div style="font-size:13px;font-weight:800">チーム共有リンク</div>
-      <div class="u" id="shareu"></div>
-      <button class="btn ghost" id="copy" style="margin-top:0;padding:12px">リンクをコピー</button>
-      <div style="font-size:11.5px;color:var(--sub);margin-top:9px">LINE等でチームに送るだけ。受け取った人はタップで見られます。</div>
+    <div class="secttl">今週のセット（<span id="cnt">${draft.l.length}</span>曲）・「楽譜」で中身を確認</div><div id="selbox"></div>
+    <button class="btn gold" id="pub">📡 配信する／変更を反映</button>
+    <div class="hint" id="pubstate">${PUB?'配信中：'+esc(PUB.t)+'（'+PUB.l.length+'曲）':'まだ配信されていません'}</div>
+    <div class="share">
+      <div style="font-size:13px;font-weight:800">メンバーに送るURL（ずっと同じ）</div>
+      <div class="u" id="shareu">https://shouronpoumanju.github.io/sanbi-k4m2p8/</div>
+      <button class="btn ghost" id="copy" style="margin-top:0;padding:12px">URLをコピー</button>
+      <div style="font-size:11.5px;color:var(--sub);margin-top:9px">配信後に曲を入れ替えても「配信する」を押し直せば全員に反映されます。配信から1週間経つと自動的に非表示になります。</div>
     </div>
-    <div class="secttl">ライブラリ（${SONGS.length}曲）・頭文字で選ぶ</div><div class="idxbar" id="idxbar"></div><div class="lib" id="libbox"></div>`;
+    <div class="secttl">ライブラリ（${SONGS.length}曲）・頭文字で選ぶ</div><div class="idxbar" id="idxbar"></div><div class="lib" id="libbox"></div>
+    <div class="secttl">配信設定</div>
+    <div class="share" style="border-style:solid">
+      <div style="font-size:12.5px;color:var(--sub);line-height:1.5">配信ボタンを使うにはGitHubトークンをこの端末に1回だけ保存します。<span id="patstate" style="font-weight:800;color:var(--accent)"></span></div>
+      <input class="search" id="pat" type="password" placeholder="GitHubトークンを貼り付け" autocomplete="off" style="margin:10px 0 8px">
+      <button class="btn ghost" id="patsave" style="margin-top:0;padding:12px">トークンを保存</button>
+    </div>`;
   app.appendChild(m);
   drawSel();drawLib('');
-  document.getElementById('back').onclick=()=>{route='home';render()};
+  const et=document.getElementById('etitle'),es=document.getElementById('esub');
+  const commit=()=>{draft.t=et.textContent.trim()||'今週の賛美';draft.s=es.textContent.trim();save(LS_DRAFT,draft)};
+  et.addEventListener('blur',commit);es.addEventListener('blur',commit);
+  [et,es].forEach(x=>x.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();x.blur()}}));
+  document.getElementById('back').onclick=()=>{commit();route='home';render()};
   document.getElementById('q').oninput=e=>drawLib(e.target.value);
-  document.getElementById('mklink').onclick=makeLink;
+  document.getElementById('pub').onclick=()=>{commit();publish()};
   document.getElementById('copy').onclick=()=>{const u=document.getElementById('shareu').textContent;navigator.clipboard&&navigator.clipboard.writeText(u).then(()=>toast('コピーしました'),()=>toast('長押しでコピーしてください'))};
-}
-function makeLink(){
-  if(!draft.l.length){toast('曲を選んでください');return}
-  save(LS_DRAFT,draft);
-  document.getElementById('shareu').textContent=buildLink({t:draft.t,s:draft.s,l:draft.l});
-  const sb=document.getElementById('sharebox');sb.style.display='block';sb.scrollIntoView({behavior:'smooth',block:'center'});
+  const ps=document.getElementById('patstate');if(load(LS_PAT))ps.textContent='（設定済み）';
+  document.getElementById('patsave').onclick=()=>{const v=document.getElementById('pat').value.trim();if(!v){toast('トークンを貼り付けてください');return}save(LS_PAT,v);document.getElementById('pat').value='';ps.textContent='（設定済み）';toast('保存しました')};
 }
 function drawSel(){const box=document.getElementById('selbox');box.innerHTML='';const c=document.getElementById('cnt');if(c)c.textContent=draft.l.length;
   if(!draft.l.length){box.innerHTML='<div class="hint">まだ曲がありません。下のライブラリから追加してください。</div>';return}
   draft.l.forEach((id,i)=>{const s=BYID[id];if(!s)return;const el=document.createElement('div');el.className='song';
-    el.innerHTML=`<div class="mv"><button data-u="${i}">▲</button><button data-d="${i}">▼</button></div><div class="num">${i+1}</div><div class="st"><div class="t">${esc(s.title)}</div></div><button class="rm" data-r="${i}">外す</button>`;
+    el.innerHTML=`<div class="mv"><button data-u="${i}">▲</button><button data-d="${i}">▼</button></div><div class="num">${i+1}</div><div class="st"><div class="t">${esc(s.title)}</div></div><button class="pv" data-v="${i}">楽譜</button><button class="rm" data-r="${i}">外す</button>`;
     box.appendChild(el);});
   box.querySelectorAll('[data-u]').forEach(b=>b.onclick=()=>mv(+b.dataset.u,-1));
   box.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>mv(+b.dataset.d,1));
-  box.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{draft.l.splice(+b.dataset.r,1);save(LS_DRAFT,draft);drawSel();drawLib(document.getElementById('q').value)});}
+  box.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{draft.l.splice(+b.dataset.r,1);save(LS_DRAFT,draft);drawSel();drawLib(document.getElementById('q').value)});
+  box.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{const ids=draft.l.filter(id=>BYID[id]);openViewer(ids,+b.dataset.v)});}
 function mv(i,d){const j=i+d;if(j<0||j>=draft.l.length)return;[draft.l[i],draft.l[j]]=[draft.l[j],draft.l[i]];save(LS_DRAFT,draft);drawSel()}
 function GORD(g){const j='あかさたなはまやらわ'.indexOf(g);if(j>=0)return j;if(g>='A'&&g<='Z')return 10+g.charCodeAt(0)-65;return 99}
 function grpList(){return [...new Set(SONGS.map(s=>s.g))].sort((a,b)=>GORD(a)-GORD(b))}
 function libItem(s){const on=draft.l.includes(s.id);const el=document.createElement('div');el.className='song'+(on?' sel':'');
-  el.innerHTML=`<div class="st"><div class="t">${esc(s.title)}</div><div class="s">${s.pages.length}ページ</div></div><button class="add">${on?'追加済':'＋ 追加'}</button>`;
+  el.innerHTML=`<div class="st"><div class="t">${esc(s.title)}</div><div class="s">${s.pages.length}ページ</div></div><button class="pv">楽譜</button><button class="add">${on?'追加済':'＋ 追加'}</button>`;
+  el.querySelector('.pv').onclick=()=>openViewer([s.id],0);
   el.querySelector('.add').onclick=()=>{on?draft.l.splice(draft.l.indexOf(s.id),1):draft.l.push(s.id);save(LS_DRAFT,draft);drawSel();drawLib(document.getElementById('q').value)};
   return el;}
 function drawLib(q){const box=document.getElementById('libbox'),bar=document.getElementById('idxbar');if(!box)return;
@@ -243,7 +291,11 @@ function buildViewer(){
    <button class="vclose" id="vx" aria-label="閉じる">✕</button>`;
   const stage=document.getElementById('stage');stage.scrollTop=0;
   hydrate();
-  document.getElementById('vx').onclick=e=>{e.stopPropagation();closeViewer()};
+  const vx=document.getElementById('vx');
+  vx.onclick=e=>{e.stopPropagation();closeViewer()};
+  const poke=()=>{vx.classList.remove('hid');clearTimeout(vx._h);vx._h=setTimeout(()=>vx.classList.add('hid'),2500)};
+  poke();
+  stage.addEventListener('click',poke);
   document.getElementById('el').onclick=()=>go(vSong-1);
   document.getElementById('er').onclick=()=>go(vSong+1);
   // double-tap zoom
