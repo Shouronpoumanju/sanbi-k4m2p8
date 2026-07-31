@@ -156,8 +156,8 @@ async function fetchPub(){
   let u=null;
   try{const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),6000);
     const r=await fetch(REPO_API+'?ref=main&cb='+Date.now(),{headers:{'Accept':'application/vnd.github.raw'},cache:'no-store',signal:ac.signal});clearTimeout(tm);
-    if(r.ok)u=new Uint8Array(await r.arrayBuffer());}catch(e){}
-  if(!u){try{const r2=await fetch('setlist.enc',{cache:'no-cache'});if(r2.ok)u=new Uint8Array(await r2.arrayBuffer());}catch(e){}}
+    if(r.ok)u=b64d((await r.text()).trim());}catch(e){}
+  if(!u){try{const r2=await fetch('setlist.enc',{cache:'no-cache'});if(r2.ok)u=b64d((await r2.text()).trim());}catch(e){}}
   if(!u||u.length<13)return null;
   try{const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(0,12)},CKEY,u.slice(12));
     const o=JSON.parse(new TextDecoder().decode(pt));
@@ -179,7 +179,7 @@ async function publish(){
     const H={'Authorization':'Bearer '+pat,'Accept':'application/vnd.github+json'};
     let sha=null;
     try{const r=await fetch(REPO_API+'?ref=main&cb='+Date.now(),{headers:H,cache:'no-store'});if(r.ok)sha=(await r.json()).sha}catch(e){}
-    const res=await fetch(REPO_API,{method:'PUT',headers:H,body:JSON.stringify(Object.assign({message:'setlist update',content:b64e(full.buffer),branch:'main'},sha?{sha:sha}:{}))});
+    const res=await fetch(REPO_API,{method:'PUT',headers:H,body:JSON.stringify(Object.assign({message:'setlist update',content:btoa(b64e(full.buffer)),branch:'main'},sha?{sha:sha}:{}))});
     if(!res.ok)throw new Error('HTTP '+res.status);
     PUB={t:draft.t,s:draft.s,l:draft.l.slice(),d:Date.now()};
     toast('配信しました！全員に反映されます');
