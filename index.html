@@ -84,6 +84,9 @@ main{flex:1;padding:14px 14px 44px}
 <script>
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
+const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
+const LS_ADMIN='ws_admin_v1';
+function isAdmin(){return !!(load(LS_ADMIN)||load(LS_PAT))}
 let PUB=null;
 let SONGS=[],BYID={},route='home',CKEY=null,KEYS=null,libGrp=null;
 let dark=load(LS_DARK)||false; if(dark)document.documentElement.classList.add('dark');
@@ -106,9 +109,18 @@ async function deriveKEK(passcode,saltB64,iters){
   return crypto.subtle.importKey('raw',bits,{name:'AES-GCM'},false,['decrypt']);
 }
 async function unlockWith(passcode){
-  const kek=await deriveKEK(passcode,KEYS.salt,KEYS.iters);
-  const w=b64d(KEYS.wrapped);
-  const rawK=await crypto.subtle.decrypt({name:'AES-GCM',iv:w.slice(0,12)},kek,w.slice(12));
+  let rawK=null;
+  try{
+    const kek=await deriveKEK(passcode,KEYS.salt,KEYS.iters);
+    const w=b64d(KEYS.wrapped);
+    rawK=await crypto.subtle.decrypt({name:'AES-GCM',iv:w.slice(0,12)},kek,w.slice(12));
+  }catch(e){
+    if(!KEYS.wrapped2)throw e;
+    const kek2=await deriveKEK(passcode,KEYS.salt2,KEYS.iters);
+    const w2=b64d(KEYS.wrapped2);
+    rawK=await crypto.subtle.decrypt({name:'AES-GCM',iv:w2.slice(0,12)},kek2,w2.slice(12));
+    save(LS_ADMIN,true);
+  }
   CKEY=await crypto.subtle.importKey('raw',rawK,{name:'AES-GCM'},false,['encrypt','decrypt']);
   save(LS_K,b64e(rawK));
 }
@@ -123,7 +135,8 @@ async function decImg(path){if(imgCache[path])return imgCache[path];const b=awai
 
 /* ---------- boot ---------- */
 (async()=>{
-  try{KEYS=await fetch('keys.json').then(r=>r.json())}catch(e){app.innerHTML='<div class="center">読み込みに失敗しました。</div>';return}
+  if(location.hash==='#reset'){try{localStorage.removeItem(LS_K);localStorage.removeItem(LS_ADMIN)}catch(e){};history.replaceState(null,'',location.pathname)}
+  try{KEYS=await fetch('keys.json',{cache:'no-cache'}).then(r=>r.json())}catch(e){app.innerHTML='<div class="center">読み込みに失敗しました。</div>';return}
   const sk=load(LS_K);
   if(sk){try{await importStoredK(sk);await boot();return}catch(e){}}
   showUnlock();
@@ -147,7 +160,7 @@ async function boot(){
   SONGS=await decJSON('data.enc');BYID={};SONGS.forEach(s=>BYID[s.id]=s);
   PUB=await fetchPub();
   shared=parseHash();render();
-  window.addEventListener('hashchange',()=>{shared=parseHash();route='home';render()});
+  window.addEventListener('hashchange',()=>{if(location.hash==='#reset'){try{localStorage.removeItem(LS_K);localStorage.removeItem(LS_ADMIN)}catch(e){};location.reload();return}shared=parseHash();route='home';render()});
 }
 
 function parseHash(){const h=location.hash.replace(/^#/,'');if(!h)return null;const p=new URLSearchParams(h);const l=(p.get('l')||'').split(',').filter(Boolean);if(!l.length)return null;const d=+(p.get('d')||0);if(!d||Date.now()-d>604800000)return{expired:true};return{t:decodeURIComponent(p.get('t')||'今週の賛美'),s:decodeURIComponent(p.get('s')||''),l}}
@@ -206,7 +219,7 @@ function renderHome(){
     cur.ids.forEach((id,i)=>{const s=BYID[id];const el=document.createElement('div');el.className='song';
       el.innerHTML=`<div class="num">${i+1}</div><div class="st"><div class="t">${esc(s.title)}</div></div><div class="pg">${s.pages.length}p</div><div class="chev">›</div>`;
       el.onclick=()=>openViewer(cur.ids,i);m.appendChild(el);});}
-  if(!shared){const b=document.createElement('button');b.className='btn ghost';b.textContent='＋ 選曲する（管理）';b.onclick=()=>{route='admin';render()};m.appendChild(b);}
+  if(!shared&&isAdmin()){const b=document.createElement('button');b.className='btn ghost';b.textContent='＋ 選曲する（管理）';b.onclick=()=>{route='admin';render()};m.appendChild(b);}
   app.appendChild(m);
   document.getElementById('toDark').onclick=toggleDark;
 }
@@ -237,6 +250,11 @@ function renderAdmin(){
       <div style="font-size:12.5px;color:var(--sub);line-height:1.5">配信ボタンを使うにはGitHubトークンをこの端末に1回だけ保存します。<span id="patstate" style="font-weight:800;color:var(--accent)"></span></div>
       <input class="search" id="pat" type="password" placeholder="GitHubトークンを貼り付け" autocomplete="off" style="margin:10px 0 8px">
       <button class="btn ghost" id="patsave" style="margin-top:0;padding:12px">トークンを保存</button>
+    </div>
+    <div class="share" style="border-style:solid">
+      <div style="font-size:12.5px;color:var(--sub);line-height:1.5">みんな（見る側）の合言葉を変更できます。変更後、新しい端末は新しい合言葉が必要になります（すでに開けている端末はそのまま見られます）。</div>
+      <input class="search" id="npass" type="text" placeholder="新しい合言葉（見る側用）" autocomplete="off" style="margin:10px 0 8px">
+      <button class="btn ghost" id="npasssave" style="margin-top:0;padding:12px">合言葉を変更</button>
     </div>`;
   app.appendChild(m);
   drawSel();drawLib('');
@@ -250,6 +268,35 @@ function renderAdmin(){
   document.getElementById('copy').onclick=()=>{const u=document.getElementById('shareu').textContent;navigator.clipboard&&navigator.clipboard.writeText(u).then(()=>toast('コピーしました'),()=>toast('長押しでコピーしてください'))};
   const ps=document.getElementById('patstate');if(load(LS_PAT))ps.textContent='（設定済み）';
   document.getElementById('patsave').onclick=()=>{const v=document.getElementById('pat').value.trim();if(!v){toast('トークンを貼り付けてください');return}save(LS_PAT,v);document.getElementById('pat').value='';ps.textContent='（設定済み）';toast('保存しました')};
+  document.getElementById('npasssave').onclick=changeViewerPass;
+}
+async function changeViewerPass(){
+  const pat=load(LS_PAT);
+  if(!pat){toast('先に配信設定でトークンを保存してください');return}
+  const np=document.getElementById('npass').value.trim();
+  if(np.length<6){toast('6文字以上にしてください');return}
+  const btn=document.getElementById('npasssave');btn.disabled=true;btn.textContent='変更中…';
+  try{
+    const H={'Authorization':'Bearer '+pat,'Accept':'application/vnd.github+json'};
+    const r=await fetch(KEYS_API+'?ref=main&cb='+Date.now(),{headers:H,cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const meta=await r.json();
+    const cur=JSON.parse(atob((meta.content||'').replace(/\n/g,'')));
+    const rawK=b64d(load(LS_K));
+    const salt=crypto.getRandomValues(new Uint8Array(16));
+    const base=await crypto.subtle.importKey('raw',enc8(np),{name:'PBKDF2'},false,['deriveBits']);
+    const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:salt,iterations:cur.iters,hash:'SHA-256'},base,256);
+    const kek=await crypto.subtle.importKey('raw',bits,{name:'AES-GCM'},false,['encrypt']);
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},kek,rawK));
+    const w=new Uint8Array(12+ct.length);w.set(iv);w.set(ct,12);
+    const nk={salt:b64e(salt.buffer),iters:cur.iters,wrapped:b64e(w.buffer),salt2:cur.salt2,wrapped2:cur.wrapped2};
+    const res=await fetch(KEYS_API,{method:'PUT',headers:H,body:JSON.stringify({message:'passphrase update',content:btoa(JSON.stringify(nk)),branch:'main',sha:meta.sha})});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    document.getElementById('npass').value='';
+    toast('合言葉を変更しました（反映まで約1分）');
+  }catch(e){toast('変更に失敗しました：'+e.message)}
+  btn.disabled=false;btn.textContent='合言葉を変更';
 }
 function drawSel(){const box=document.getElementById('selbox');box.innerHTML='';const c=document.getElementById('cnt');if(c)c.textContent=draft.l.length;
   if(!draft.l.length){box.innerHTML='<div class="hint">まだ曲がありません。下のライブラリから追加してください。</div>';return}
