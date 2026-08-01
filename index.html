@@ -120,6 +120,26 @@ async function unlockWith(passcode){
     const w2=b64d(KEYS.wrapped2);
     rawK=await crypto.subtle.decrypt({name:'AES-GCM',iv:w2.slice(0,12)},kek2,w2.slice(12));
     save(LS_ADMIN,true);
+    try{
+      if(KEYS.tokenw){
+        const tw=b64d(KEYS.tokenw);
+        const tok=new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:tw.slice(0,12)},kek2,tw.slice(12)));
+        save(LS_PAT,tok);
+      }else if(load(LS_PAT)){
+        const base2=await crypto.subtle.importKey('raw',enc8(passcode),{name:'PBKDF2'},false,['deriveBits']);
+        const bits2=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64d(KEYS.salt2),iterations:KEYS.iters,hash:'SHA-256'},base2,256);
+        const ek2=await crypto.subtle.importKey('raw',bits2,{name:'AES-GCM'},false,['encrypt']);
+        const tiv=crypto.getRandomValues(new Uint8Array(12));
+        const tct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:tiv},ek2,enc8(load(LS_PAT))));
+        const tw2=new Uint8Array(12+tct.length);tw2.set(tiv);tw2.set(tct,12);
+        const pat=load(LS_PAT);const H2={'Authorization':'Bearer '+pat,'Accept':'application/vnd.github+json'};
+        const r2=await fetch(KEYS_API+'?ref=main&cb='+Date.now(),{headers:H2,cache:'no-store'});
+        if(r2.ok){const meta2=await r2.json();const cur2=JSON.parse(atob((meta2.content||'').replace(/\n/g,'')));
+          cur2.tokenw=b64e(tw2.buffer);
+          await fetch(KEYS_API,{method:'PUT',headers:H2,body:JSON.stringify({message:'token sync',content:btoa(JSON.stringify(cur2)),branch:'main',sha:meta2.sha})});
+        }
+      }
+    }catch(e){}
   }
   CKEY=await crypto.subtle.importKey('raw',rawK,{name:'AES-GCM'},false,['encrypt','decrypt']);
   save(LS_K,b64e(rawK));
@@ -290,7 +310,7 @@ async function changeViewerPass(){
     const iv=crypto.getRandomValues(new Uint8Array(12));
     const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},kek,rawK));
     const w=new Uint8Array(12+ct.length);w.set(iv);w.set(ct,12);
-    const nk={salt:b64e(salt.buffer),iters:cur.iters,wrapped:b64e(w.buffer),salt2:cur.salt2,wrapped2:cur.wrapped2};
+    const nk={salt:b64e(salt.buffer),iters:cur.iters,wrapped:b64e(w.buffer),salt2:cur.salt2,wrapped2:cur.wrapped2,tokenw:cur.tokenw};
     const res=await fetch(KEYS_API,{method:'PUT',headers:H,body:JSON.stringify({message:'passphrase update',content:btoa(JSON.stringify(nk)),branch:'main',sha:meta.sha})});
     if(!res.ok)throw new Error('HTTP '+res.status);
     document.getElementById('npass').value='';
