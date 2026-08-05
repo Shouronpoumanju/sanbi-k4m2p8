@@ -65,6 +65,8 @@ main{flex:1;padding:14px 14px 44px}
 .viewer.on{display:flex}
 .vclose{position:absolute;top:calc(8px + env(safe-area-inset-top));left:10px;z-index:6;width:34px;height:34px;border-radius:50%;border:none;background:rgba(20,18,30,.26);color:rgba(255,255,255,.92);font-size:15px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);padding:0;transition:opacity .35s}
 .vclose.hid{opacity:0;pointer-events:none}
+.lyr{font-size:10.5px;color:var(--accent2);border:1px solid var(--accent2);border-radius:20px;padding:2px 7px;flex:0 0 auto;font-weight:700}
+html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 .pv{border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:9px;padding:6px 9px;font-size:12px;font-weight:700;cursor:pointer;flex:0 0 auto}
 .stage{flex:1;overflow-y:auto;overflow-x:hidden;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch;background:var(--bg)}
 .slide{scroll-snap-align:start;scroll-snap-stop:always;padding:0;position:relative;background:var(--bg)}
@@ -254,7 +256,7 @@ function renderAdmin(){
     <button class="iconbtn" id="back">‹ 戻る</button>`;
   app.appendChild(h);
   const m=document.createElement('main');
-  m.innerHTML=`<input class="search" id="q" placeholder="曲名で検索（例：Way / 御名 / Amazing）">
+  m.innerHTML=`<input class="search" id="q" placeholder="曲名・歌詞で検索（例：Way / 御名 / 十字架）">
     <div class="secttl">今週のセット（<span id="cnt">${draft.l.length}</span>曲）・「楽譜」で中身を確認</div><div id="selbox"></div>
     <button class="btn gold" id="pub">📡 配信する／変更を反映</button>
     <div class="hint" id="pubstate">${PUB?'配信中：'+esc(PUB.t)+'（'+PUB.l.length+'曲）':'まだ配信されていません'}</div>
@@ -330,15 +332,26 @@ function drawSel(){const box=document.getElementById('selbox');box.innerHTML='';
 function mv(i,d){const j=i+d;if(j<0||j>=draft.l.length)return;[draft.l[i],draft.l[j]]=[draft.l[j],draft.l[i]];save(LS_DRAFT,draft);drawSel()}
 function GORD(g){const j='あかさたなはまやらわ'.indexOf(g);if(j>=0)return j;if(g>='A'&&g<='Z')return 10+g.charCodeAt(0)-65;return 99}
 function grpList(){return [...new Set(SONGS.map(s=>s.g))].sort((a,b)=>GORD(a)-GORD(b))}
-function libItem(s){const on=draft.l.includes(s.id);const el=document.createElement('div');el.className='song'+(on?' sel':'');
-  el.innerHTML=`<div class="st"><div class="t">${esc(s.title)}</div><div class="s">${s.pages.length}ページ</div></div><button class="pv">楽譜</button><button class="add">${on?'追加済':'＋ 追加'}</button>`;
+function libItem(s,lyric){const on=draft.l.includes(s.id);const el=document.createElement('div');el.className='song'+(on?' sel':'');
+  el.innerHTML=`<div class="st"><div class="t">${esc(s.title)}</div><div class="s">${s.pages.length}ページ</div></div>${lyric?'<div class="lyr">歌詞</div>':''}<button class="pv">楽譜</button><button class="add">${on?'追加済':'＋ 追加'}</button>`;
   el.querySelector('.pv').onclick=()=>openViewer([s.id],0);
   el.querySelector('.add').onclick=()=>{on?draft.l.splice(draft.l.indexOf(s.id),1):draft.l.push(s.id);save(LS_DRAFT,draft);drawSel();drawLib(document.getElementById('q').value)};
   return el;}
+function nrm(t){t=(t||'').normalize('NFKC').toLowerCase();
+  t=t.replace(/[\u30a1-\u30f6]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0x60)});
+  return t.replace(/[\s\u3000]+/g,'').replace(/[、。,\.'"()（）\[\]「」・:;!！?？\-–—_/\\|=+*#~^`&%$@<>]/g,'');}
 function drawLib(q){const box=document.getElementById('libbox'),bar=document.getElementById('idxbar');if(!box)return;
   q=(q||'').trim().toLowerCase();box.innerHTML='';
   if(q){if(bar)bar.style.display='none';let n=0;
-    for(const s of SONGS){if(!s.title.toLowerCase().includes(q)&&!((s.y||'').includes(q)))continue;if(++n>400)break;box.appendChild(libItem(s));}
+    const nq=nrm(q);
+    const A=[],B=[];
+    for(const s of SONGS){
+      if(s.title.toLowerCase().includes(q)||(s.y||'').includes(q)){A.push(s);continue}
+      if(nq.length>=2&&(s.x||'').includes(nq)){B.push(s);continue}
+    }
+    A.forEach(s=>{if(++n<=400)box.appendChild(libItem(s))});
+    if(B.length){const h=document.createElement('div');h.className='secttl';h.textContent='歌詞に一致（'+B.length+'曲）';box.appendChild(h);
+      B.forEach(s=>{if(++n<=400)box.appendChild(libItem(s,true))});}
     if(!n)box.innerHTML='<div class="hint">見つかりませんでした</div>';return;}
   const gs=grpList();if(libGrp==null||!gs.includes(libGrp))libGrp=gs[0];
   if(bar){bar.style.display='flex';bar.innerHTML='';gs.forEach(g=>{const b=document.createElement('button');b.textContent=g;if(g===libGrp)b.className='on';b.onclick=()=>{libGrp=g;const q2=document.getElementById('q');if(q2)q2.value='';drawLib('')};bar.appendChild(b);});}
