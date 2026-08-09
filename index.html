@@ -65,6 +65,25 @@ main{flex:1;padding:14px 14px 44px}
 .viewer.on{display:flex}
 .vclose{position:absolute;top:calc(8px + env(safe-area-inset-top));left:10px;z-index:6;width:34px;height:34px;border-radius:50%;border:none;background:rgba(20,18,30,.26);color:rgba(255,255,255,.92);font-size:15px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);padding:0;transition:opacity .35s}
 .vclose.hid{opacity:0;pointer-events:none}
+.flagbtn{position:absolute;right:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:6;width:44px;height:44px;border-radius:50%;border:none;background:rgba(20,18,30,.42);color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);transition:opacity .35s;padding:0}
+.flagbtn.hid{opacity:0;pointer-events:none}
+.sheet{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.45);display:none;align-items:flex-end}
+.sheet.on{display:flex}
+.sheetbox{background:var(--card);width:100%;max-width:680px;margin:0 auto;border-radius:18px 18px 0 0;padding:18px 16px calc(20px + env(safe-area-inset-bottom))}
+.sheetbox h3{margin:0 0 3px;font-size:16px;font-weight:800}
+.sheetbox .sub{font-size:12.5px;color:var(--sub)}
+.cats{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}
+.cats button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:20px;padding:7px 12px;font-size:13px;font-weight:700;cursor:pointer}
+.cats button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.sheetbox textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:12px;padding:11px;font-size:15px;min-height:80px;font-family:inherit}
+.note{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 13px;margin-bottom:10px;box-shadow:var(--shadow)}
+.note .nh{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--sub);flex-wrap:wrap}
+.note .nt{font-size:15px;font-weight:800;margin:6px 0 3px}
+.note .nb{font-size:14px;line-height:1.5;white-space:pre-wrap}
+.note .na{display:flex;gap:8px;margin-top:10px}
+.note .na button{flex:1;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:8px;font-size:12.5px;font-weight:700;cursor:pointer}
+.note.done{opacity:.55}
+.tag{font-size:10.5px;font-weight:800;border-radius:20px;padding:2px 8px;border:1px solid var(--accent);color:var(--accent)}
 .lyr{font-size:10.5px;color:var(--accent2);border:1px solid var(--accent2);border-radius:20px;padding:2px 7px;flex:0 0 auto;font-weight:700}
 html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 .pv{border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:9px;padding:6px 9px;font-size:12px;font-weight:700;cursor:pointer;flex:0 0 auto}
@@ -82,13 +101,19 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <body>
 <div class="wrap" id="app"><div class="center"><div class="spin"></div><div>読み込み中…</div></div></div>
 <div class="viewer" id="viewer"></div>
+<div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
-const LS_ADMIN='ws_admin_v1';
-function isAdmin(){return !!(load(LS_ADMIN)||load(LS_PAT))}
+const LS_ADMIN='ws_admin_v1',LS_ROLE='ws_role_v1';
+const NOTES_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/notes.enc';
+let NOTES=[];
+function role(){const r=load(LS_ROLE);if(r)return r;return load(LS_ADMIN)?'admin':'viewer'}
+function isAdmin(){return role()==='admin'}
+function isLib(){return role()==='lib'}
+function isStaff(){return isAdmin()||isLib()}
 let PUB=null;
 let SONGS=[],BYID={},route='home',CKEY=null,KEYS=null,libGrp=null;
 let dark=load(LS_DARK)||false; if(dark)document.documentElement.classList.add('dark');
@@ -116,12 +141,25 @@ async function unlockWith(passcode){
     const kek=await deriveKEK(passcode,KEYS.salt,KEYS.iters);
     const w=b64d(KEYS.wrapped);
     rawK=await crypto.subtle.decrypt({name:'AES-GCM',iv:w.slice(0,12)},kek,w.slice(12));
+    save(LS_ROLE,'viewer');save(LS_ADMIN,false);
   }catch(e){
+    let done=false;
+    if(KEYS.wrapped3){
+      try{
+        const kek3=await deriveKEK(passcode,KEYS.salt3,KEYS.iters);
+        const w3=b64d(KEYS.wrapped3);
+        rawK=await crypto.subtle.decrypt({name:'AES-GCM',iv:w3.slice(0,12)},kek3,w3.slice(12));
+        save(LS_ROLE,'lib');save(LS_ADMIN,false);done=true;
+        try{if(KEYS.tokenw3){const t3=b64d(KEYS.tokenw3);
+          save(LS_PAT,new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:t3.slice(0,12)},kek3,t3.slice(12))));}}catch(e3){}
+      }catch(e2){}
+    }
+    if(!done){
     if(!KEYS.wrapped2)throw e;
     const kek2=await deriveKEK(passcode,KEYS.salt2,KEYS.iters);
     const w2=b64d(KEYS.wrapped2);
     rawK=await crypto.subtle.decrypt({name:'AES-GCM',iv:w2.slice(0,12)},kek2,w2.slice(12));
-    save(LS_ADMIN,true);
+    save(LS_ADMIN,true);save(LS_ROLE,'admin');
     try{
       if(KEYS.tokenw){
         const tw=b64d(KEYS.tokenw);
@@ -142,6 +180,7 @@ async function unlockWith(passcode){
         }
       }
     }catch(e){}
+    }
   }
   CKEY=await crypto.subtle.importKey('raw',rawK,{name:'AES-GCM'},false,['encrypt','decrypt']);
   save(LS_K,b64e(rawK));
@@ -157,7 +196,7 @@ async function decImg(path){if(imgCache[path])return imgCache[path];const b=awai
 
 /* ---------- boot ---------- */
 (async()=>{
-  if(location.hash==='#reset'){try{localStorage.removeItem(LS_K);localStorage.removeItem(LS_ADMIN)}catch(e){};history.replaceState(null,'',location.pathname)}
+  if(location.hash==='#reset'){try{localStorage.removeItem(LS_K);localStorage.removeItem(LS_ADMIN);localStorage.removeItem(LS_ROLE);localStorage.removeItem(LS_PAT)}catch(e){};history.replaceState(null,'',location.pathname)}
   try{KEYS=await fetch('keys.json',{cache:'no-cache'}).then(r=>r.json())}catch(e){app.innerHTML='<div class="center">読み込みに失敗しました。</div>';return}
   const sk=load(LS_K);
   if(sk){try{await importStoredK(sk);await boot();return}catch(e){}}
@@ -181,8 +220,9 @@ async function boot(){
   app.innerHTML='<div class="center"><div class="spin"></div><div>展開中…</div></div>';
   SONGS=await decJSON('data.enc');BYID={};SONGS.forEach(s=>BYID[s.id]=s);
   PUB=await fetchPub();
+  if(isStaff())NOTES=await fetchNotes();
   shared=parseHash();render();
-  window.addEventListener('hashchange',()=>{if(location.hash==='#reset'){try{localStorage.removeItem(LS_K);localStorage.removeItem(LS_ADMIN)}catch(e){};location.reload();return}shared=parseHash();route='home';render()});
+  window.addEventListener('hashchange',()=>{if(location.hash==='#reset'){try{localStorage.removeItem(LS_K);localStorage.removeItem(LS_ADMIN);localStorage.removeItem(LS_ROLE);localStorage.removeItem(LS_PAT)}catch(e){};location.reload();return}shared=parseHash();route='home';render()});
 }
 
 function parseHash(){const h=location.hash.replace(/^#/,'');if(!h)return null;const p=new URLSearchParams(h);const l=(p.get('l')||'').split(',').filter(Boolean);if(!l.length)return null;const d=+(p.get('d')||0);if(!d||Date.now()-d>604800000)return{expired:true};return{t:decodeURIComponent(p.get('t')||'今週の賛美'),s:decodeURIComponent(p.get('s')||''),l}}
@@ -222,8 +262,35 @@ async function publish(){
   }catch(e){toast('配信に失敗しました：'+e.message)}
   if(btn){btn.disabled=false;btn.textContent='📡 配信する／変更を反映'}
 }
+const CATS=['歌詞の誤り','コードの誤り','紙の原本がない','その他'];
+async function fetchNotes(){
+  let u=null;
+  try{const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),6000);
+    const r=await fetch(NOTES_API+'?ref=main&cb='+Date.now(),{headers:{'Accept':'application/vnd.github.raw'},cache:'no-store',signal:ac.signal});clearTimeout(tm);
+    if(r.ok)u=b64d((await r.text()).trim());}catch(e){}
+  if(!u){try{const r2=await fetch('notes.enc',{cache:'no-cache'});if(r2.ok)u=b64d((await r2.text()).trim());}catch(e){}}
+  if(!u||u.length<13)return [];
+  try{const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(0,12)},CKEY,u.slice(12));
+    const a=JSON.parse(new TextDecoder().decode(pt));return Array.isArray(a)?a:[];}catch(e){return []}
+}
+async function saveNotes(list){
+  const pat=load(LS_PAT);
+  if(!pat)throw new Error('書き込み用の設定がありません');
+  const ek=await crypto.subtle.importKey('raw',b64d(load(LS_K)),{name:'AES-GCM'},false,['encrypt']);
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},ek,enc8(JSON.stringify(list))));
+  const full=new Uint8Array(12+ct.length);full.set(iv);full.set(ct,12);
+  const H={'Authorization':'Bearer '+pat,'Accept':'application/vnd.github+json'};
+  let sha=null;
+  try{const r=await fetch(NOTES_API+'?ref=main&cb='+Date.now(),{headers:H,cache:'no-store'});if(r.ok)sha=(await r.json()).sha}catch(e){}
+  const res=await fetch(NOTES_API,{method:'PUT',headers:H,body:JSON.stringify(Object.assign({message:'notes update',content:btoa(b64e(full.buffer)),branch:'main'},sha?{sha:sha}:{}))});
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  NOTES=list;
+}
+function fmtDate(ms){const d=new Date(ms);return (d.getMonth()+1)+'/'+d.getDate()}
+function openCount(){return NOTES.filter(n=>!n.done).length}
 function currentList(){if(shared)return{t:shared.t,s:shared.s,ids:shared.l.filter(id=>BYID[id])};if(PUB)return{t:PUB.t,s:PUB.s,ids:PUB.l.filter(id=>BYID[id])};return null}
-function render(){route==='admin'?renderAdmin():renderHome()}
+function render(){if(route==='admin'&&isAdmin())return renderAdmin();if(route==='lib'&&isStaff())return renderLib();if(route==='notes'&&isStaff())return renderNotes();renderHome()}
 
 function renderHome(){
   if(shared&&shared.expired){app.innerHTML='<div class="center"><div style="font-size:40px">\u23f3</div><div style="font-size:18px;font-weight:800;color:var(--ink)">\u3053\u306e\u5171\u6709\u30ea\u30f3\u30af\u306f\u671f\u9650\u5207\u308c\u3067\u3059</div><div>\u5171\u6709\u30ea\u30f3\u30af\u306f\u4f5c\u6210\u304b\u30891\u9031\u9593\u3067\u81ea\u52d5\u7684\u306b\u7121\u52b9\u306b\u306a\u308a\u307e\u3059\u3002<br>\u65b0\u3057\u3044\u30ea\u30f3\u30af\u3092\u9001\u3063\u3066\u3082\u3089\u3063\u3066\u304f\u3060\u3055\u3044\u3002</div></div>';return}
@@ -242,10 +309,72 @@ function renderHome(){
       el.innerHTML=`<div class="num">${i+1}</div><div class="st"><div class="t">${esc(s.title)}</div></div><div class="pg">${s.pages.length}p</div><div class="chev">›</div>`;
       el.onclick=()=>openViewer(cur.ids,i);m.appendChild(el);});}
   if(!shared&&isAdmin()){const b=document.createElement('button');b.className='btn ghost';b.textContent='＋ 選曲する（管理）';b.onclick=()=>{route='admin';render()};m.appendChild(b);}
+  if(!shared&&isStaff()){
+    const lb=document.createElement('button');lb.className='btn ghost';lb.textContent='📚 楽譜ライブラリ（'+SONGS.length+'曲）';lb.onclick=()=>{route='lib';render()};m.appendChild(lb);
+    const nb=document.createElement('button');nb.className='btn ghost';nb.textContent='🚩 気づきメモ'+(openCount()?'（'+openCount()+'件）':'');nb.onclick=()=>{route='notes';render()};m.appendChild(nb);
+  }
   app.appendChild(m);
   document.getElementById('toDark').onclick=toggleDark;
 }
 
+function renderLib(){
+  app.innerHTML='';
+  const h=document.createElement('header');h.className='top';
+  h.innerHTML=`<div style="min-width:0"><div class="brand">LIBRARY</div>
+    <div class="h1">楽譜ライブラリ</div>
+    <div class="date">全${SONGS.length}曲・閲覧専用</div></div>
+    <button class="iconbtn" id="back">‹ 戻る</button>`;
+  app.appendChild(h);
+  const m=document.createElement('main');
+  m.innerHTML=`<input class="search" id="q" placeholder="曲名・歌詞で検索（例：Way / 御名 / 十字架）">
+    <div class="hint">曲をタップすると楽譜が開きます。気づいたことは楽譜の右下🚩からメモできます。</div>
+    <div class="idxbar" id="idxbar"></div><div class="lib" id="libbox"></div>`;
+  app.appendChild(m);
+  drawLib('');
+  document.getElementById('back').onclick=()=>{route='home';render()};
+  document.getElementById('q').oninput=e=>drawLib(e.target.value);
+}
+function renderNotes(){
+  app.innerHTML='';
+  const h=document.createElement('header');h.className='top';
+  h.innerHTML=`<div style="min-width:0"><div class="brand">NOTES</div>
+    <div class="h1">気づきメモ</div>
+    <div class="date">未対応 ${openCount()} 件 / 全 ${NOTES.length} 件</div></div>
+    <button class="iconbtn" id="back">‹ 戻る</button>`;
+  app.appendChild(h);
+  const m=document.createElement('main');m.id='notesmain';
+  app.appendChild(m);
+  drawNotes();
+  document.getElementById('back').onclick=()=>{route='home';render()};
+}
+function drawNotes(){
+  const m=document.getElementById('notesmain');if(!m)return;
+  m.innerHTML='';
+  if(!NOTES.length){m.innerHTML='<div class="center" style="min-height:40vh">まだメモはありません。<br>楽譜を開いて右下の🚩から追加できます。</div>';return}
+  const list=NOTES.slice().sort((a,b)=>(a.done?1:0)-(b.done?1:0)||b.at-a.at);
+  list.forEach(n=>{
+    const s=BYID[n.sid];
+    const el=document.createElement('div');el.className='note'+(n.done?' done':'');
+    el.innerHTML=`<div class="nh"><span class="tag">${esc(n.cat)}</span><span>${esc(n.by||'')}</span><span>${fmtDate(n.at)}</span>${n.done?'<span>✓ 解決済み</span>':''}</div>
+      <div class="nt">${esc(n.title)}${n.page?'（'+n.page+'ページ目）':''}</div>
+      <div class="nb">${esc(n.text)}</div>
+      <div class="na">${s?'<button data-open="'+n.id+'">楽譜を開く</button>':''}<button data-tg="${n.id}">${n.done?'未対応に戻す':'解決済みにする'}</button><button data-del="${n.id}">削除</button></div>`;
+    m.appendChild(el);
+  });
+  m.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>{const n=NOTES.find(x=>x.id===b.dataset.open);if(n&&BYID[n.sid])openViewer([n.sid],0,n.page)});
+  m.querySelectorAll('[data-tg]').forEach(b=>b.onclick=async()=>{
+    const n=NOTES.find(x=>x.id===b.dataset.tg);if(!n)return;
+    b.disabled=true;const prev=n.done;n.done=!n.done;
+    try{await saveNotes(NOTES);drawNotes();toast(n.done?'解決済みにしました':'未対応に戻しました')}
+    catch(e){n.done=prev;b.disabled=false;toast('保存に失敗しました：'+e.message)}
+  });
+  m.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.del;const keep=NOTES.filter(x=>x.id!==id);const bak=NOTES.slice();
+    b.disabled=true;
+    try{await saveNotes(keep);drawNotes();toast('削除しました')}
+    catch(e){NOTES=bak;b.disabled=false;toast('削除に失敗しました：'+e.message)}
+  });
+}
 function renderAdmin(){
   app.innerHTML='';
   const h=document.createElement('header');h.className='top';
@@ -277,6 +406,11 @@ function renderAdmin(){
       <div style="font-size:12.5px;color:var(--sub);line-height:1.5">みんな（見る側）の合言葉を変更できます。変更後、新しい端末は新しい合言葉が必要になります（すでに開けている端末はそのまま見られます）。</div>
       <input class="search" id="npass" type="text" placeholder="新しい合言葉（見る側用）" autocomplete="off" style="margin:10px 0 8px">
       <button class="btn ghost" id="npasssave" style="margin-top:0;padding:12px">合言葉を変更</button>
+    </div>
+    <div class="share" style="border-style:solid">
+      <div style="font-size:12.5px;color:var(--sub);line-height:1.5">楽譜管理者（司書）用の合言葉。この合言葉で入った人は、214曲すべての楽譜を見てメモを残せますが、選曲・配信はできません。<span id="lstate" style="font-weight:800;color:var(--accent)"></span></div>
+      <input class="search" id="lpass" type="text" placeholder="司書の合言葉" autocomplete="off" style="margin:10px 0 8px">
+      <button class="btn ghost" id="lpasssave" style="margin-top:0;padding:12px">司書の合言葉を設定</button>
     </div>`;
   app.appendChild(m);
   drawSel();drawLib('');
@@ -291,6 +425,40 @@ function renderAdmin(){
   const ps=document.getElementById('patstate');if(load(LS_PAT))ps.textContent='（設定済み）';
   document.getElementById('patsave').onclick=()=>{const v=document.getElementById('pat').value.trim();if(!v){toast('トークンを貼り付けてください');return}save(LS_PAT,v);document.getElementById('pat').value='';ps.textContent='（設定済み）';toast('保存しました')};
   document.getElementById('npasssave').onclick=changeViewerPass;
+  const ls=document.getElementById('lstate');if(KEYS&&KEYS.wrapped3)ls.textContent='（設定済み）';
+  document.getElementById('lpasssave').onclick=setLibPass;
+}
+async function setLibPass(){
+  const pat=load(LS_PAT);
+  if(!pat){toast('先に配信設定でトークンを保存してください');return}
+  const np=document.getElementById('lpass').value.trim();
+  if(np.length<6){toast('6文字以上にしてください');return}
+  const btn=document.getElementById('lpasssave');btn.disabled=true;btn.textContent='設定中…';
+  try{
+    const H={'Authorization':'Bearer '+pat,'Accept':'application/vnd.github+json'};
+    const r=await fetch(KEYS_API+'?ref=main&cb='+Date.now(),{headers:H,cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const meta=await r.json();
+    const cur=JSON.parse(atob((meta.content||'').replace(/\n/g,'')));
+    const salt3=crypto.getRandomValues(new Uint8Array(16));
+    const base=await crypto.subtle.importKey('raw',enc8(np),{name:'PBKDF2'},false,['deriveBits']);
+    const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:salt3,iterations:cur.iters,hash:'SHA-256'},base,256);
+    const kek=await crypto.subtle.importKey('raw',bits,{name:'AES-GCM'},false,['encrypt']);
+    const iv1=crypto.getRandomValues(new Uint8Array(12));
+    const c1=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv1},kek,b64d(load(LS_K))));
+    const w3=new Uint8Array(12+c1.length);w3.set(iv1);w3.set(c1,12);
+    const iv2=crypto.getRandomValues(new Uint8Array(12));
+    const c2=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv2},kek,enc8(pat)));
+    const t3=new Uint8Array(12+c2.length);t3.set(iv2);t3.set(c2,12);
+    cur.salt3=b64e(salt3.buffer);cur.wrapped3=b64e(w3.buffer);cur.tokenw3=b64e(t3.buffer);
+    const res=await fetch(KEYS_API,{method:'PUT',headers:H,body:JSON.stringify({message:'librarian passphrase',content:btoa(JSON.stringify(cur)),branch:'main',sha:meta.sha})});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    KEYS.salt3=cur.salt3;KEYS.wrapped3=cur.wrapped3;KEYS.tokenw3=cur.tokenw3;
+    document.getElementById('lpass').value='';
+    document.getElementById('lstate').textContent='（設定済み）';
+    toast('司書の合言葉を設定しました（反映まで約1分）');
+  }catch(e){toast('設定に失敗しました：'+e.message)}
+  btn.disabled=false;btn.textContent='司書の合言葉を設定';
 }
 async function changeViewerPass(){
   const pat=load(LS_PAT);
@@ -312,7 +480,7 @@ async function changeViewerPass(){
     const iv=crypto.getRandomValues(new Uint8Array(12));
     const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},kek,rawK));
     const w=new Uint8Array(12+ct.length);w.set(iv);w.set(ct,12);
-    const nk={salt:b64e(salt.buffer),iters:cur.iters,wrapped:b64e(w.buffer),salt2:cur.salt2,wrapped2:cur.wrapped2,tokenw:cur.tokenw};
+    const nk={salt:b64e(salt.buffer),iters:cur.iters,wrapped:b64e(w.buffer),salt2:cur.salt2,wrapped2:cur.wrapped2,tokenw:cur.tokenw,salt3:cur.salt3,wrapped3:cur.wrapped3,tokenw3:cur.tokenw3};
     const res=await fetch(KEYS_API,{method:'PUT',headers:H,body:JSON.stringify({message:'passphrase update',content:btoa(JSON.stringify(nk)),branch:'main',sha:meta.sha})});
     if(!res.ok)throw new Error('HTTP '+res.status);
     document.getElementById('npass').value='';
@@ -320,7 +488,7 @@ async function changeViewerPass(){
   }catch(e){toast('変更に失敗しました：'+e.message)}
   btn.disabled=false;btn.textContent='合言葉を変更';
 }
-function drawSel(){const box=document.getElementById('selbox');box.innerHTML='';const c=document.getElementById('cnt');if(c)c.textContent=draft.l.length;
+function drawSel(){const box=document.getElementById('selbox');if(!box)return;box.innerHTML='';const c=document.getElementById('cnt');if(c)c.textContent=draft.l.length;
   if(!draft.l.length){box.innerHTML='<div class="hint">まだ曲がありません。下のライブラリから追加してください。</div>';return}
   draft.l.forEach((id,i)=>{const s=BYID[id];if(!s)return;const el=document.createElement('div');el.className='song';
     el.innerHTML=`<div class="mv"><button data-u="${i}">▲</button><button data-d="${i}">▼</button></div><div class="num">${i+1}</div><div class="st"><div class="t">${esc(s.title)}</div></div><button class="pv" data-v="${i}">楽譜</button><button class="rm" data-r="${i}">外す</button>`;
@@ -332,10 +500,11 @@ function drawSel(){const box=document.getElementById('selbox');box.innerHTML='';
 function mv(i,d){const j=i+d;if(j<0||j>=draft.l.length)return;[draft.l[i],draft.l[j]]=[draft.l[j],draft.l[i]];save(LS_DRAFT,draft);drawSel()}
 function GORD(g){const j='あかさたなはまやらわ'.indexOf(g);if(j>=0)return j;if(g>='A'&&g<='Z')return 10+g.charCodeAt(0)-65;return 99}
 function grpList(){return [...new Set(SONGS.map(s=>s.g))].sort((a,b)=>GORD(a)-GORD(b))}
-function libItem(s,lyric){const on=draft.l.includes(s.id);const el=document.createElement('div');el.className='song'+(on?' sel':'');
-  el.innerHTML=`<div class="st"><div class="t">${esc(s.title)}</div><div class="s">${s.pages.length}ページ</div></div>${lyric?'<div class="lyr">歌詞</div>':''}<button class="pv">楽譜</button><button class="add">${on?'追加済':'＋ 追加'}</button>`;
+function libItem(s,lyric){const viewOnly=(route==='lib');const on=draft.l.includes(s.id);const el=document.createElement('div');el.className='song'+(on?' sel':'');
+  el.innerHTML=`<div class="st"><div class="t">${esc(s.title)}</div><div class="s">${s.pages.length}ページ</div></div>${lyric?'<div class="lyr">歌詞</div>':''}<button class="pv">楽譜</button>${viewOnly?'':`<button class="add">${on?'追加済':'＋ 追加'}</button>`}`;
   el.querySelector('.pv').onclick=()=>openViewer([s.id],0);
-  el.querySelector('.add').onclick=()=>{on?draft.l.splice(draft.l.indexOf(s.id),1):draft.l.push(s.id);save(LS_DRAFT,draft);drawSel();drawLib(document.getElementById('q').value)};
+  if(viewOnly){el.onclick=e=>{if(!e.target.closest('button'))openViewer([s.id],0)};}
+  else el.querySelector('.add').onclick=()=>{on?draft.l.splice(draft.l.indexOf(s.id),1):draft.l.push(s.id);save(LS_DRAFT,draft);drawSel();drawLib(document.getElementById('q').value)};
   return el;}
 function nrm(t){t=(t||'').normalize('NFKC').toLowerCase();
   t=t.replace(/[\u30a1-\u30f6]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0x60)});
@@ -361,21 +530,24 @@ function drawLib(q){const box=document.getElementById('libbox'),bar=document.get
 const V=document.getElementById('viewer');
 let vIds=[],vSong=0;
 function cur(){return BYID[vIds[vSong]]}
-function openViewer(ids,idx){vIds=ids;vSong=idx;buildViewer();V.classList.add('on');preload(idx+1)}
+function openViewer(ids,idx,page){vIds=ids;vSong=idx;buildViewer();V.classList.add('on');preload(idx+1);
+  if(page&&page>1){setTimeout(()=>{const st=document.getElementById('stage');const sl=st?st.querySelectorAll('.slide'):[];if(sl[page-1])st.scrollTop=sl[page-1].offsetTop},250)}}
 function closeViewer(){V.classList.remove('on')}
 async function preload(i){const s=BYID[vIds[i]];if(!s)return;for(const p of s.pages){try{await decImg(p)}catch(e){}}}
 function buildViewer(){
   const s=cur();
   const slides=s.pages.map((p,pi)=>`<div class="slide load"><img data-enc="${p}" alt="">${s.pages.length>1?`<div class="pageflag">${pi+1} / ${s.pages.length}</div>`:''}</div>`).join('');
   V.innerHTML=`<div class="stage" id="stage">${slides}<div class="edge l" id="el"></div><div class="edge r" id="er"></div></div>
-   <button class="vclose" id="vx" aria-label="閉じる">✕</button>`;
+   <button class="vclose" id="vx" aria-label="閉じる">✕</button>${isStaff()?'<button class="flagbtn" id="vflag" aria-label="メモ">🚩</button>':''}`;
   const stage=document.getElementById('stage');stage.scrollTop=0;
   hydrate();
   const vx=document.getElementById('vx');
   vx.onclick=e=>{e.stopPropagation();closeViewer()};
-  const poke=()=>{vx.classList.remove('hid');clearTimeout(vx._h);vx._h=setTimeout(()=>vx.classList.add('hid'),2500)};
+  const vf=document.getElementById('vflag');
+  const poke=()=>{vx.classList.remove('hid');if(vf)vf.classList.remove('hid');clearTimeout(vx._h);vx._h=setTimeout(()=>{vx.classList.add('hid');if(vf)vf.classList.add('hid')},2500)};
   poke();
   stage.addEventListener('click',poke);
+  if(vf)vf.onclick=e=>{e.stopPropagation();openNoteSheet()};
   document.getElementById('el').onclick=()=>go(vSong-1);
   document.getElementById('er').onclick=()=>go(vSong+1);
   // double-tap zoom
@@ -384,6 +556,36 @@ function buildViewer(){
   let sx=0,sy=0;
   stage.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
   stage.addEventListener('touchend',e=>{if(stage.querySelector('.slide.zoom'))return;const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.6)go(vSong+(dx<0?1:-1))},{passive:true});
+}
+function curPage(){const st=document.getElementById('stage');if(!st)return 1;const sl=[...st.querySelectorAll('.slide')];let best=1,bd=1e9;sl.forEach((s,i)=>{const d=Math.abs(s.offsetTop-st.scrollTop);if(d<bd){bd=d;best=i+1}});return best}
+let noteCat=CATS[0];
+function openNoteSheet(){
+  const s=cur();if(!s)return;
+  const pg=curPage();
+  noteCat=CATS[0];
+  const sh=document.getElementById('sheet');
+  sh.innerHTML=`<div class="sheetbox">
+    <h3>🚩 気づきメモ</h3>
+    <div class="sub">${esc(s.title)}${s.pages.length>1?'（'+pg+'ページ目）':''}</div>
+    <div class="cats" id="cats">${CATS.map((c,i)=>`<button data-c="${i}"${i===0?' class="on"':''}>${c}</button>`).join('')}</div>
+    <textarea id="ntext" placeholder="例：2段目のコードが違う／3行目の歌詞が抜けている"></textarea>
+    <button class="btn" id="nsave">メモを保存</button>
+    <button class="btn ghost" id="ncancel" style="margin-top:8px">キャンセル</button>
+  </div>`;
+  sh.classList.add('on');
+  sh.querySelectorAll('#cats button').forEach(b=>b.onclick=()=>{noteCat=CATS[+b.dataset.c];sh.querySelectorAll('#cats button').forEach(x=>x.classList.remove('on'));b.classList.add('on')});
+  document.getElementById('ncancel').onclick=()=>sh.classList.remove('on');
+  sh.onclick=e=>{if(e.target===sh)sh.classList.remove('on')};
+  document.getElementById('ntext').focus();
+  document.getElementById('nsave').onclick=async()=>{
+    const t=document.getElementById('ntext').value.trim();
+    if(!t){toast('内容を書いてください');return}
+    const btn=document.getElementById('nsave');btn.disabled=true;btn.textContent='保存中…';
+    const n={id:'n'+Date.now()+Math.floor(Math.random()*1000),sid:s.id,title:s.title,page:pg,cat:noteCat,text:t,by:isAdmin()?'管理':'楽譜管理',at:Date.now(),done:false};
+    const bak=NOTES.slice();
+    try{await saveNotes(NOTES.concat([n]));sh.classList.remove('on');toast('メモを保存しました')}
+    catch(e){NOTES=bak;btn.disabled=false;btn.textContent='メモを保存';toast('保存に失敗しました：'+e.message)}
+  };
 }
 async function hydrate(){const imgs=[...document.querySelectorAll('#stage img[data-enc]')];for(const im of imgs){const p=im.getAttribute('data-enc');try{im.src=await decImg(p);im.parentElement.classList.remove('load')}catch(e){}im.removeAttribute('data-enc')}}
 function go(i){if(i<0||i>=vIds.length)return;vSong=i;buildViewer();preload(i+1)}
