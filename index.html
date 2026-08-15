@@ -25,6 +25,9 @@ header.top{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(16p
 .iconbtn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:9px 13px;font-size:14px;font-weight:600;box-shadow:var(--shadow);cursor:pointer;flex:0 0 auto}
 main{flex:1;padding:14px 14px 44px}
 .hint{font-size:12.5px;color:var(--sub);text-align:center;margin:6px 0 14px}
+.logoutbox{margin:26px 0 34px;text-align:center;font-size:12px;color:var(--sub);line-height:1.9}
+.logoutbtn{background:none;border:0;color:var(--sub);font-size:12px;text-decoration:underline;padding:6px 12px;cursor:pointer;font-family:inherit}
+.logoutbtn.arm{color:#c0392b;font-weight:700;text-decoration:none;border:1px solid #c0392b;border-radius:20px}
 .song{display:flex;align-items:center;gap:13px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 15px;margin-bottom:11px;box-shadow:var(--shadow);cursor:pointer;transition:transform .07s}
 .song:active{transform:scale(.985)}
 .num{min-width:30px;height:30px;border-radius:9px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex:0 0 auto}
@@ -312,6 +315,21 @@ function renderHome(){
   if(!shared&&isStaff()){
     const lb=document.createElement('button');lb.className='btn ghost';lb.textContent='📚 楽譜ライブラリ（'+SONGS.length+'曲）';lb.onclick=()=>{route='lib';render()};m.appendChild(lb);
     const nb=document.createElement('button');nb.className='btn ghost';nb.textContent='🚩 気づきメモ'+(openCount()?'（'+openCount()+'件）':'');nb.onclick=()=>{route='notes';render()};m.appendChild(nb);
+  }
+  if(!shared){
+    const RN={admin:'管理者',lib:'司書（楽譜管理）',viewer:'メンバー'};
+    const wrap=document.createElement('div');wrap.className='logoutbox';
+    const lab=document.createElement('div');lab.textContent=(RN[role()]||'メンバー')+'としてログイン中';
+    const lo=document.createElement('button');lo.type='button';lo.className='logoutbtn';lo.textContent='ログアウト';
+    let armed=false,tm=null;
+    lo.onclick=()=>{
+      if(!armed){armed=true;lo.textContent='もう一度タップでログアウト';lo.classList.add('arm');
+        tm=setTimeout(()=>{armed=false;lo.textContent='ログアウト';lo.classList.remove('arm')},4000);return}
+      clearTimeout(tm);
+      try{localStorage.removeItem(LS_K);localStorage.removeItem(LS_ADMIN);localStorage.removeItem(LS_ROLE);localStorage.removeItem(LS_PAT);localStorage.removeItem(LS_DRAFT)}catch(e){}
+      location.replace(location.pathname);
+    };
+    wrap.appendChild(lab);wrap.appendChild(lo);m.appendChild(wrap);
   }
   app.appendChild(m);
   document.getElementById('toDark').onclick=toggleDark;
