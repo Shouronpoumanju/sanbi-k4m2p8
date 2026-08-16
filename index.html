@@ -116,7 +116,10 @@ let NOTES=[];
 function role(){const r=load(LS_ROLE);if(r)return r;return load(LS_ADMIN)?'admin':'viewer'}
 function isAdmin(){return role()==='admin'}
 function isLib(){return role()==='lib'}
-function isStaff(){return isAdmin()||isLib()}
+function isLead(){return role()==='lead'}
+function canSelect(){return isAdmin()||isLead()}
+function isStaff(){return isAdmin()||isLib()||isLead()}
+const ROLENAME={admin:'管理者',lead:'選曲担当',lib:'司書（楽譜管理）',viewer:'メンバー'};
 let PUB=null;
 let SONGS=[],BYID={},route='home',CKEY=null,KEYS=null,libGrp=null;
 let dark=load(LS_DARK)||false; if(dark)document.documentElement.classList.add('dark');
@@ -138,52 +141,45 @@ async function deriveKEK(passcode,saltB64,iters){
   const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64d(saltB64),iterations:iters,hash:'SHA-256'},base,256);
   return crypto.subtle.importKey('raw',bits,{name:'AES-GCM'},false,['decrypt']);
 }
+const TIERS=[{r:'viewer',s:'salt',w:'wrapped',t:null},
+             {r:'lead',s:'salt4',w:'wrapped4',t:'tokenw4'},
+             {r:'lib',s:'salt3',w:'wrapped3',t:'tokenw3'},
+             {r:'admin',s:'salt2',w:'wrapped2',t:'tokenw'}];
 async function unlockWith(passcode){
-  let rawK=null;
-  try{
-    const kek=await deriveKEK(passcode,KEYS.salt,KEYS.iters);
-    const w=b64d(KEYS.wrapped);
-    rawK=await crypto.subtle.decrypt({name:'AES-GCM',iv:w.slice(0,12)},kek,w.slice(12));
-    save(LS_ROLE,'viewer');save(LS_ADMIN,false);
-  }catch(e){
-    let done=false;
-    if(KEYS.wrapped3){
-      try{
-        const kek3=await deriveKEK(passcode,KEYS.salt3,KEYS.iters);
-        const w3=b64d(KEYS.wrapped3);
-        rawK=await crypto.subtle.decrypt({name:'AES-GCM',iv:w3.slice(0,12)},kek3,w3.slice(12));
-        save(LS_ROLE,'lib');save(LS_ADMIN,false);done=true;
-        try{if(KEYS.tokenw3){const t3=b64d(KEYS.tokenw3);
-          save(LS_PAT,new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:t3.slice(0,12)},kek3,t3.slice(12))));}}catch(e3){}
-      }catch(e2){}
-    }
-    if(!done){
-    if(!KEYS.wrapped2)throw e;
-    const kek2=await deriveKEK(passcode,KEYS.salt2,KEYS.iters);
-    const w2=b64d(KEYS.wrapped2);
-    rawK=await crypto.subtle.decrypt({name:'AES-GCM',iv:w2.slice(0,12)},kek2,w2.slice(12));
-    save(LS_ADMIN,true);save(LS_ROLE,'admin');
+  let rawK=null,hit=null;
+  for(let i=0;i<TIERS.length;i++){
+    const T=TIERS[i];
+    if(!KEYS[T.w]||!KEYS[T.s])continue;
     try{
-      if(KEYS.tokenw){
-        const tw=b64d(KEYS.tokenw);
-        const tok=new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:tw.slice(0,12)},kek2,tw.slice(12)));
-        save(LS_PAT,tok);
-      }else if(load(LS_PAT)){
-        const base2=await crypto.subtle.importKey('raw',enc8(passcode),{name:'PBKDF2'},false,['deriveBits']);
-        const bits2=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64d(KEYS.salt2),iterations:KEYS.iters,hash:'SHA-256'},base2,256);
-        const ek2=await crypto.subtle.importKey('raw',bits2,{name:'AES-GCM'},false,['encrypt']);
-        const tiv=crypto.getRandomValues(new Uint8Array(12));
-        const tct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:tiv},ek2,enc8(load(LS_PAT))));
-        const tw2=new Uint8Array(12+tct.length);tw2.set(tiv);tw2.set(tct,12);
-        const pat=load(LS_PAT);const H2={'Authorization':'Bearer '+pat,'Accept':'application/vnd.github+json'};
-        const r2=await fetch(KEYS_API+'?ref=main&cb='+Date.now(),{headers:H2,cache:'no-store'});
-        if(r2.ok){const meta2=await r2.json();const cur2=JSON.parse(atob((meta2.content||'').replace(/\n/g,'')));
-          cur2.tokenw=b64e(tw2.buffer);
-          await fetch(KEYS_API,{method:'PUT',headers:H2,body:JSON.stringify({message:'token sync',content:btoa(JSON.stringify(cur2)),branch:'main',sha:meta2.sha})});
-        }
+      const kek=await deriveKEK(passcode,KEYS[T.s],KEYS.iters);
+      const w=b64d(KEYS[T.w]);
+      rawK=await crypto.subtle.decrypt({name:'AES-GCM',iv:w.slice(0,12)},kek,w.slice(12));
+      hit=T;
+      if(T.t&&KEYS[T.t]){
+        try{const tw=b64d(KEYS[T.t]);
+          save(LS_PAT,new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:tw.slice(0,12)},kek,tw.slice(12))));
+        }catch(et){}
+      }
+      break;
+    }catch(e){}
+  }
+  if(!hit)throw new Error('bad passcode');
+  save(LS_ROLE,hit.r);save(LS_ADMIN,hit.r==='admin');
+  if(hit.r==='admin'&&!KEYS.tokenw&&load(LS_PAT)){
+    try{
+      const base2=await crypto.subtle.importKey('raw',enc8(passcode),{name:'PBKDF2'},false,['deriveBits']);
+      const bits2=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64d(KEYS.salt2),iterations:KEYS.iters,hash:'SHA-256'},base2,256);
+      const ek2=await crypto.subtle.importKey('raw',bits2,{name:'AES-GCM'},false,['encrypt']);
+      const tiv=crypto.getRandomValues(new Uint8Array(12));
+      const tct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:tiv},ek2,enc8(load(LS_PAT))));
+      const tw2=new Uint8Array(12+tct.length);tw2.set(tiv);tw2.set(tct,12);
+      const pat=load(LS_PAT);const H2={'Authorization':'Bearer '+pat,'Accept':'application/vnd.github+json'};
+      const r2=await fetch(KEYS_API+'?ref=main&cb='+Date.now(),{headers:H2,cache:'no-store'});
+      if(r2.ok){const meta2=await r2.json();const cur2=JSON.parse(atob((meta2.content||'').replace(/\n/g,'')));
+        cur2.tokenw=b64e(tw2.buffer);KEYS.tokenw=cur2.tokenw;
+        await fetch(KEYS_API,{method:'PUT',headers:H2,body:JSON.stringify({message:'token sync',content:btoa(JSON.stringify(cur2)),branch:'main',sha:meta2.sha})});
       }
     }catch(e){}
-    }
   }
   CKEY=await crypto.subtle.importKey('raw',rawK,{name:'AES-GCM'},false,['encrypt','decrypt']);
   save(LS_K,b64e(rawK));
@@ -293,7 +289,7 @@ async function saveNotes(list){
 function fmtDate(ms){const d=new Date(ms);return (d.getMonth()+1)+'/'+d.getDate()}
 function openCount(){return NOTES.filter(n=>!n.done).length}
 function currentList(){if(shared)return{t:shared.t,s:shared.s,ids:shared.l.filter(id=>BYID[id])};if(PUB)return{t:PUB.t,s:PUB.s,ids:PUB.l.filter(id=>BYID[id])};return null}
-function render(){if(route==='admin'&&isAdmin())return renderAdmin();if(route==='lib'&&isStaff())return renderLib();if(route==='notes'&&isStaff())return renderNotes();renderHome()}
+function render(){if(route==='admin'&&canSelect())return renderAdmin();if(route==='lib'&&isStaff())return renderLib();if(route==='notes'&&isStaff())return renderNotes();renderHome()}
 
 function renderHome(){
   if(shared&&shared.expired){app.innerHTML='<div class="center"><div style="font-size:40px">\u23f3</div><div style="font-size:18px;font-weight:800;color:var(--ink)">\u3053\u306e\u5171\u6709\u30ea\u30f3\u30af\u306f\u671f\u9650\u5207\u308c\u3067\u3059</div><div>\u5171\u6709\u30ea\u30f3\u30af\u306f\u4f5c\u6210\u304b\u30891\u9031\u9593\u3067\u81ea\u52d5\u7684\u306b\u7121\u52b9\u306b\u306a\u308a\u307e\u3059\u3002<br>\u65b0\u3057\u3044\u30ea\u30f3\u30af\u3092\u9001\u3063\u3066\u3082\u3089\u3063\u3066\u304f\u3060\u3055\u3044\u3002</div></div>';return}
@@ -311,15 +307,14 @@ function renderHome(){
     cur.ids.forEach((id,i)=>{const s=BYID[id];const el=document.createElement('div');el.className='song';
       el.innerHTML=`<div class="num">${i+1}</div><div class="st"><div class="t">${esc(s.title)}</div></div><div class="pg">${s.pages.length}p</div><div class="chev">›</div>`;
       el.onclick=()=>openViewer(cur.ids,i);m.appendChild(el);});}
-  if(!shared&&isAdmin()){const b=document.createElement('button');b.className='btn ghost';b.textContent='＋ 選曲する（管理）';b.onclick=()=>{route='admin';render()};m.appendChild(b);}
+  if(!shared&&canSelect()){const b=document.createElement('button');b.className='btn ghost';b.textContent='＋ 選曲する（管理）';b.onclick=()=>{route='admin';render()};m.appendChild(b);}
   if(!shared&&isStaff()){
     const lb=document.createElement('button');lb.className='btn ghost';lb.textContent='📚 楽譜ライブラリ（'+SONGS.length+'曲）';lb.onclick=()=>{route='lib';render()};m.appendChild(lb);
     const nb=document.createElement('button');nb.className='btn ghost';nb.textContent='🚩 気づきメモ'+(openCount()?'（'+openCount()+'件）':'');nb.onclick=()=>{route='notes';render()};m.appendChild(nb);
   }
   if(!shared){
-    const RN={admin:'管理者',lib:'司書（楽譜管理）',viewer:'メンバー'};
     const wrap=document.createElement('div');wrap.className='logoutbox';
-    const lab=document.createElement('div');lab.textContent=(RN[role()]||'メンバー')+'としてログイン中';
+    const lab=document.createElement('div');lab.textContent=(ROLENAME[role()]||'メンバー')+'としてログイン中';
     const lo=document.createElement('button');lo.type='button';lo.className='logoutbtn';lo.textContent='ログアウト';
     let armed=false,tm=null;
     lo.onclick=()=>{
@@ -403,17 +398,7 @@ function renderAdmin(){
     <button class="iconbtn" id="back">‹ 戻る</button>`;
   app.appendChild(h);
   const m=document.createElement('main');
-  m.innerHTML=`<input class="search" id="q" placeholder="曲名・歌詞で検索（例：Way / 御名 / 十字架）">
-    <div class="secttl">今週のセット（<span id="cnt">${draft.l.length}</span>曲）・「楽譜」で中身を確認</div><div id="selbox"></div>
-    <button class="btn gold" id="pub">📡 配信する／変更を反映</button>
-    <div class="hint" id="pubstate">${PUB?'配信中：'+esc(PUB.t)+'（'+PUB.l.length+'曲）':'まだ配信されていません'}</div>
-    <div class="share">
-      <div style="font-size:13px;font-weight:800">メンバーに送るURL（ずっと同じ）</div>
-      <div class="u" id="shareu">https://shouronpoumanju.github.io/sanbi-k4m2p8/</div>
-      <button class="btn ghost" id="copy" style="margin-top:0;padding:12px">URLをコピー</button>
-      <div style="font-size:11.5px;color:var(--sub);margin-top:9px">配信後に曲を入れ替えても「配信する」を押し直せば全員に反映されます。配信から1週間経つと自動的に非表示になります。</div>
-    </div>
-    <div class="secttl">ライブラリ（${SONGS.length}曲）・頭文字で選ぶ</div><div class="idxbar" id="idxbar"></div><div class="lib" id="libbox"></div>
+  const SETTINGS=!isAdmin()?'':`
     <div class="secttl">配信設定</div>
     <div class="share" style="border-style:solid">
       <div style="font-size:12.5px;color:var(--sub);line-height:1.5">配信ボタンを使うにはGitHubトークンをこの端末に1回だけ保存します。<span id="patstate" style="font-weight:800;color:var(--accent)"></span></div>
@@ -426,10 +411,27 @@ function renderAdmin(){
       <button class="btn ghost" id="npasssave" style="margin-top:0;padding:12px">合言葉を変更</button>
     </div>
     <div class="share" style="border-style:solid">
+      <div style="font-size:12.5px;color:var(--sub);line-height:1.5">選曲担当の合言葉。この合言葉で入った人は、曲を選んで配信できます（トークンや合言葉の設定はできません）。<span id="dstate" style="font-weight:800;color:var(--accent)"></span></div>
+      <input class="search" id="dpass" type="text" placeholder="選曲担当の合言葉" autocomplete="off" style="margin:10px 0 8px">
+      <button class="btn ghost" id="dpasssave" style="margin-top:0;padding:12px">選曲担当の合言葉を設定</button>
+    </div>
+    <div class="share" style="border-style:solid">
       <div style="font-size:12.5px;color:var(--sub);line-height:1.5">楽譜管理者（司書）用の合言葉。この合言葉で入った人は、214曲すべての楽譜を見てメモを残せますが、選曲・配信はできません。<span id="lstate" style="font-weight:800;color:var(--accent)"></span></div>
       <input class="search" id="lpass" type="text" placeholder="司書の合言葉" autocomplete="off" style="margin:10px 0 8px">
       <button class="btn ghost" id="lpasssave" style="margin-top:0;padding:12px">司書の合言葉を設定</button>
     </div>`;
+  m.innerHTML=`<input class="search" id="q" placeholder="曲名・歌詞で検索（例：Way / 御名 / 十字架）">
+    <div class="secttl">今週のセット（<span id="cnt">${draft.l.length}</span>曲）・「楽譜」で中身を確認</div><div id="selbox"></div>
+    <button class="btn gold" id="pub">📡 配信する／変更を反映</button>
+    <div class="hint" id="pubstate">${PUB?'配信中：'+esc(PUB.t)+'（'+PUB.l.length+'曲）':'まだ配信されていません'}</div>
+    <div class="share">
+      <div style="font-size:13px;font-weight:800">メンバーに送るURL（ずっと同じ）</div>
+      <div class="u" id="shareu">https://shouronpoumanju.github.io/sanbi-k4m2p8/</div>
+      <button class="btn ghost" id="copy" style="margin-top:0;padding:12px">URLをコピー</button>
+      <div style="font-size:11.5px;color:var(--sub);margin-top:9px">配信後に曲を入れ替えても「配信する」を押し直せば全員に反映されます。配信から1週間経つと自動的に非表示になります。</div>
+    </div>
+    <div class="secttl">ライブラリ（${SONGS.length}曲）・頭文字で選ぶ</div><div class="idxbar" id="idxbar"></div><div class="lib" id="libbox"></div>
+    ${SETTINGS}`;
   app.appendChild(m);
   drawSel();drawLib('');
   const et=document.getElementById('etitle'),es=document.getElementById('esub');
@@ -440,43 +442,50 @@ function renderAdmin(){
   document.getElementById('q').oninput=e=>drawLib(e.target.value);
   document.getElementById('pub').onclick=()=>{commit();publish()};
   document.getElementById('copy').onclick=()=>{const u=document.getElementById('shareu').textContent;navigator.clipboard&&navigator.clipboard.writeText(u).then(()=>toast('コピーしました'),()=>toast('長押しでコピーしてください'))};
-  const ps=document.getElementById('patstate');if(load(LS_PAT))ps.textContent='（設定済み）';
-  document.getElementById('patsave').onclick=()=>{const v=document.getElementById('pat').value.trim();if(!v){toast('トークンを貼り付けてください');return}save(LS_PAT,v);document.getElementById('pat').value='';ps.textContent='（設定済み）';toast('保存しました')};
-  document.getElementById('npasssave').onclick=changeViewerPass;
-  const ls=document.getElementById('lstate');if(KEYS&&KEYS.wrapped3)ls.textContent='（設定済み）';
-  document.getElementById('lpasssave').onclick=setLibPass;
+  if(isAdmin()){
+    const ps=document.getElementById('patstate');if(load(LS_PAT))ps.textContent='（設定済み）';
+    document.getElementById('patsave').onclick=()=>{const v=document.getElementById('pat').value.trim();if(!v){toast('トークンを貼り付けてください');return}save(LS_PAT,v);document.getElementById('pat').value='';ps.textContent='（設定済み）';toast('保存しました')};
+    document.getElementById('npasssave').onclick=changeViewerPass;
+    const ls=document.getElementById('lstate');if(KEYS&&KEYS.wrapped3)ls.textContent='（設定済み）';
+    document.getElementById('lpasssave').onclick=()=>setTierPass('lib');
+    const ds=document.getElementById('dstate');if(KEYS&&KEYS.wrapped4)ds.textContent='（設定済み）';
+    document.getElementById('dpasssave').onclick=()=>setTierPass('lead');
+  }
 }
-async function setLibPass(){
+const TIERCFG={lib:{i:'lpass',st:'lstate',b:'lpasssave',s:'salt3',w:'wrapped3',t:'tokenw3',n:'司書の合言葉を設定',m:'librarian passphrase'},
+               lead:{i:'dpass',st:'dstate',b:'dpasssave',s:'salt4',w:'wrapped4',t:'tokenw4',n:'選曲担当の合言葉を設定',m:'leader passphrase'}};
+async function setTierPass(kind){
+  const C=TIERCFG[kind];
   const pat=load(LS_PAT);
   if(!pat){toast('先に配信設定でトークンを保存してください');return}
-  const np=document.getElementById('lpass').value.trim();
+  const np=document.getElementById(C.i).value.trim();
   if(np.length<6){toast('6文字以上にしてください');return}
-  const btn=document.getElementById('lpasssave');btn.disabled=true;btn.textContent='設定中…';
+  const btn=document.getElementById(C.b);btn.disabled=true;btn.textContent='設定中…';
   try{
     const H={'Authorization':'Bearer '+pat,'Accept':'application/vnd.github+json'};
     const r=await fetch(KEYS_API+'?ref=main&cb='+Date.now(),{headers:H,cache:'no-store'});
     if(!r.ok)throw new Error('HTTP '+r.status);
     const meta=await r.json();
     const cur=JSON.parse(atob((meta.content||'').replace(/\n/g,'')));
-    const salt3=crypto.getRandomValues(new Uint8Array(16));
+    const salt=crypto.getRandomValues(new Uint8Array(16));
     const base=await crypto.subtle.importKey('raw',enc8(np),{name:'PBKDF2'},false,['deriveBits']);
-    const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:salt3,iterations:cur.iters,hash:'SHA-256'},base,256);
+    const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:salt,iterations:cur.iters,hash:'SHA-256'},base,256);
     const kek=await crypto.subtle.importKey('raw',bits,{name:'AES-GCM'},false,['encrypt']);
     const iv1=crypto.getRandomValues(new Uint8Array(12));
     const c1=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv1},kek,b64d(load(LS_K))));
-    const w3=new Uint8Array(12+c1.length);w3.set(iv1);w3.set(c1,12);
+    const wr=new Uint8Array(12+c1.length);wr.set(iv1);wr.set(c1,12);
     const iv2=crypto.getRandomValues(new Uint8Array(12));
     const c2=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv2},kek,enc8(pat)));
-    const t3=new Uint8Array(12+c2.length);t3.set(iv2);t3.set(c2,12);
-    cur.salt3=b64e(salt3.buffer);cur.wrapped3=b64e(w3.buffer);cur.tokenw3=b64e(t3.buffer);
-    const res=await fetch(KEYS_API,{method:'PUT',headers:H,body:JSON.stringify({message:'librarian passphrase',content:btoa(JSON.stringify(cur)),branch:'main',sha:meta.sha})});
+    const tk=new Uint8Array(12+c2.length);tk.set(iv2);tk.set(c2,12);
+    cur[C.s]=b64e(salt.buffer);cur[C.w]=b64e(wr.buffer);cur[C.t]=b64e(tk.buffer);
+    const res=await fetch(KEYS_API,{method:'PUT',headers:H,body:JSON.stringify({message:C.m,content:btoa(JSON.stringify(cur)),branch:'main',sha:meta.sha})});
     if(!res.ok)throw new Error('HTTP '+res.status);
-    KEYS.salt3=cur.salt3;KEYS.wrapped3=cur.wrapped3;KEYS.tokenw3=cur.tokenw3;
-    document.getElementById('lpass').value='';
-    document.getElementById('lstate').textContent='（設定済み）';
-    toast('司書の合言葉を設定しました（反映まで約1分）');
+    KEYS[C.s]=cur[C.s];KEYS[C.w]=cur[C.w];KEYS[C.t]=cur[C.t];
+    document.getElementById(C.i).value='';
+    document.getElementById(C.st).textContent='（設定済み）';
+    toast('設定しました（反映まで約1分）');
   }catch(e){toast('設定に失敗しました：'+e.message)}
-  btn.disabled=false;btn.textContent='司書の合言葉を設定';
+  btn.disabled=false;btn.textContent=C.n;
 }
 async function changeViewerPass(){
   const pat=load(LS_PAT);
@@ -599,7 +608,7 @@ function openNoteSheet(){
     const t=document.getElementById('ntext').value.trim();
     if(!t){toast('内容を書いてください');return}
     const btn=document.getElementById('nsave');btn.disabled=true;btn.textContent='保存中…';
-    const n={id:'n'+Date.now()+Math.floor(Math.random()*1000),sid:s.id,title:s.title,page:pg,cat:noteCat,text:t,by:isAdmin()?'管理':'楽譜管理',at:Date.now(),done:false};
+    const n={id:'n'+Date.now()+Math.floor(Math.random()*1000),sid:s.id,title:s.title,page:pg,cat:noteCat,text:t,by:ROLENAME[role()]||'メンバー',at:Date.now(),done:false};
     const bak=NOTES.slice();
     try{await saveNotes(NOTES.concat([n]));sh.classList.remove('on');toast('メモを保存しました')}
     catch(e){NOTES=bak;btn.disabled=false;btn.textContent='メモを保存';toast('保存に失敗しました：'+e.message)}
