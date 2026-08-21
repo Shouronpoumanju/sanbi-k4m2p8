@@ -107,7 +107,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='20260817a';
+const BUILD='20260821a';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -128,7 +128,8 @@ let shared=null;
 let draft=load(LS_DRAFT)||{t:'今週の賛美',s:nextSunday()+' 礼拝',l:[]};
 function load(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
 function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
-function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1800)}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3200)}
+function emsg(e){const m=''+(e&&e.message||e);if(/401/.test(m))return 'トークンが無効か期限切れです。管理画面の「配信設定」で新しいトークンを保存してください';if(/403/.test(m))return 'GitHubに拒否されました（権限不足かAPI制限）。少し待つかトークンを確認してください';if(/409|422/.test(m))return '他の端末と同時に保存されたようです。もう一度お試しください';return m}
 function nextSunday(){const d=new Date();d.setDate(d.getDate()+((7-d.getDay())%7));return `${d.getMonth()+1}月${d.getDate()}日(日)`}
 function esc(t){return(t||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function enc8(s){return new TextEncoder().encode(s)}
@@ -273,7 +274,7 @@ async function publish(){
     PUB={t:draft.t,s:draft.s,l:draft.l.slice(),d:Date.now()};
     toast('配信しました！全員に反映されます');
     const st=document.getElementById('pubstate');if(st)st.textContent='配信中：'+draft.t+'（'+draft.l.length+'曲）';
-  }catch(e){toast('配信に失敗しました：'+e.message)}
+  }catch(e){toast('配信に失敗しました：'+emsg(e))}
   if(btn){btn.disabled=false;btn.textContent='📡 配信する／変更を反映'}
 }
 const CATS=['歌詞の誤り','コードの誤り','紙の原本がない','その他'];
@@ -395,13 +396,13 @@ function drawNotes(){
     const n=NOTES.find(x=>x.id===b.dataset.tg);if(!n)return;
     b.disabled=true;const prev=n.done;n.done=!n.done;
     try{await saveNotes(NOTES);drawNotes();toast(n.done?'解決済みにしました':'未対応に戻しました')}
-    catch(e){n.done=prev;b.disabled=false;toast('保存に失敗しました：'+e.message)}
+    catch(e){n.done=prev;b.disabled=false;toast('保存に失敗しました：'+emsg(e))}
   });
   m.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
     const id=b.dataset.del;const keep=NOTES.filter(x=>x.id!==id);const bak=NOTES.slice();
     b.disabled=true;
     try{await saveNotes(keep);drawNotes();toast('削除しました')}
-    catch(e){NOTES=bak;b.disabled=false;toast('削除に失敗しました：'+e.message)}
+    catch(e){NOTES=bak;b.disabled=false;toast('削除に失敗しました：'+emsg(e))}
   });
 }
 function renderAdmin(){
@@ -419,6 +420,7 @@ function renderAdmin(){
     <div class="share" style="border-style:solid">
       <div style="font-size:12.5px;color:var(--sub);line-height:1.5">配信ボタンを使うにはGitHubトークンをこの端末に1回だけ保存します。<span id="patstate" style="font-weight:800;color:var(--accent)"></span></div>
       <input class="search" id="pat" type="password" placeholder="GitHubトークンを貼り付け" autocomplete="off" style="margin:10px 0 8px">
+      <input class="search" id="patpw" type="password" placeholder="管理の合言葉（新しいトークンを全端末に配る時だけ）" autocomplete="off" autocapitalize="none" style="margin:0 0 8px">
       <button class="btn ghost" id="patsave" style="margin-top:0;padding:12px">トークンを保存</button>
     </div>
     <div class="share" style="border-style:solid">
@@ -460,7 +462,35 @@ function renderAdmin(){
   document.getElementById('copy').onclick=()=>{const u=document.getElementById('shareu').textContent;navigator.clipboard&&navigator.clipboard.writeText(u).then(()=>toast('コピーしました'),()=>toast('長押しでコピーしてください'))};
   if(isAdmin()){
     const ps=document.getElementById('patstate');if(load(LS_PAT))ps.textContent='（設定済み）';
-    document.getElementById('patsave').onclick=()=>{const v=document.getElementById('pat').value.trim();if(!v){toast('トークンを貼り付けてください');return}save(LS_PAT,v);document.getElementById('pat').value='';ps.textContent='（設定済み）';toast('保存しました')};
+    document.getElementById('patsave').onclick=async()=>{
+      const v=document.getElementById('pat').value.trim();
+      if(!v){toast('トークンを貼り付けてください');return}
+      save(LS_PAT,v);document.getElementById('pat').value='';ps.textContent='（設定済み）';
+      const pw=document.getElementById('patpw').value.trim();
+      if(!pw){toast('この端末に保存しました（他の端末にも配るには管理の合言葉も入力）');return}
+      try{
+        const kek=await deriveKEK(pw,KEYS.salt2,KEYS.iters);
+        const w2=b64d(KEYS.wrapped2);
+        await crypto.subtle.decrypt({name:'AES-GCM',iv:w2.slice(0,12)},kek,w2.slice(12));
+        const base=await crypto.subtle.importKey('raw',enc8(pw),{name:'PBKDF2'},false,['deriveBits']);
+        const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64d(KEYS.salt2),iterations:KEYS.iters,hash:'SHA-256'},base,256);
+        const ek=await crypto.subtle.importKey('raw',bits,{name:'AES-GCM'},false,['encrypt']);
+        const iv=crypto.getRandomValues(new Uint8Array(12));
+        const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},ek,enc8(v)));
+        const tw=new Uint8Array(12+ct.length);tw.set(iv);tw.set(ct,12);
+        const H={'Authorization':'Bearer '+v,'Accept':'application/vnd.github+json'};
+        const r=await fetch(KEYS_API+'?ref=main&cb='+Date.now(),{headers:H,cache:'no-store'});
+        if(!r.ok)throw new Error('HTTP '+r.status);
+        const meta=await r.json();
+        const cur=JSON.parse(atob((meta.content||'').replace(/\n/g,'')));
+        cur.tokenw=b64e(tw.buffer);
+        const res=await fetch(KEYS_API,{method:'PUT',headers:H,body:JSON.stringify({message:'token rotate',content:btoa(JSON.stringify(cur)),branch:'main',sha:meta.sha})});
+        if(!res.ok)throw new Error('HTTP '+res.status);
+        KEYS.tokenw=cur.tokenw;
+        document.getElementById('patpw').value='';
+        toast('保存して全管理端末に配布しました。司書・選曲担当の合言葉も下で設定し直すと、その端末にも新トークンが配られます');
+      }catch(e){toast('配布に失敗：合言葉が違うか、'+emsg(e))}
+    };
     document.getElementById('npasssave').onclick=changeViewerPass;
     const ls=document.getElementById('lstate');if(KEYS&&KEYS.wrapped3)ls.textContent='（設定済み）';
     document.getElementById('lpasssave').onclick=()=>setTierPass('lib');
@@ -500,7 +530,7 @@ async function setTierPass(kind){
     document.getElementById(C.i).value='';
     document.getElementById(C.st).textContent='（設定済み）';
     toast('設定しました（反映まで約1分）');
-  }catch(e){toast('設定に失敗しました：'+e.message)}
+  }catch(e){toast('設定に失敗しました：'+emsg(e))}
   btn.disabled=false;btn.textContent=C.n;
 }
 async function changeViewerPass(){
@@ -528,7 +558,7 @@ async function changeViewerPass(){
     if(!res.ok)throw new Error('HTTP '+res.status);
     document.getElementById('npass').value='';
     toast('合言葉を変更しました（反映まで約1分）');
-  }catch(e){toast('変更に失敗しました：'+e.message)}
+  }catch(e){toast('変更に失敗しました：'+emsg(e))}
   btn.disabled=false;btn.textContent='合言葉を変更';
 }
 function drawSel(){const box=document.getElementById('selbox');if(!box)return;box.innerHTML='';const c=document.getElementById('cnt');if(c)c.textContent=draft.l.length;
@@ -627,7 +657,7 @@ function openNoteSheet(){
     const n={id:'n'+Date.now()+Math.floor(Math.random()*1000),sid:s.id,title:s.title,page:pg,cat:noteCat,text:t,by:ROLENAME[role()]||'メンバー',at:Date.now(),done:false};
     const bak=NOTES.slice();
     try{await saveNotes(NOTES.concat([n]));sh.classList.remove('on');toast('メモを保存しました')}
-    catch(e){NOTES=bak;btn.disabled=false;btn.textContent='メモを保存';toast('保存に失敗しました：'+e.message)}
+    catch(e){NOTES=bak;btn.disabled=false;btn.textContent='メモを保存';toast('保存に失敗しました：'+emsg(e))}
   };
 }
 async function hydrate(){const imgs=[...document.querySelectorAll('#stage img[data-enc]')];for(const im of imgs){const p=im.getAttribute('data-enc');try{im.src=await decImg(p);im.parentElement.classList.remove('load')}catch(e){}im.removeAttribute('data-enc')}}
