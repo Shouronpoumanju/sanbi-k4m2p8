@@ -107,6 +107,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
+const BUILD='20260817a';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -196,7 +197,14 @@ async function decImg(path){if(imgCache[path])return imgCache[path];const b=awai
 /* ---------- boot ---------- */
 (async()=>{
   if(location.hash==='#reset'){try{localStorage.removeItem(LS_K);localStorage.removeItem(LS_ADMIN);localStorage.removeItem(LS_ROLE);localStorage.removeItem(LS_PAT)}catch(e){};history.replaceState(null,'',location.pathname)}
-  try{KEYS=await fetch('keys.json',{cache:'no-cache'}).then(r=>r.json())}catch(e){app.innerHTML='<div class="center">読み込みに失敗しました。</div>';return}
+  try{
+    const rb=await fetch('build.txt?cb='+Date.now(),{cache:'no-store'});
+    if(rb.ok){const bt=(await rb.text()).trim();
+      if(bt&&bt.length<40&&bt!==BUILD&&sessionStorage.getItem('ws_upd')!==bt){
+        sessionStorage.setItem('ws_upd',bt);
+        location.replace(location.pathname+'?b='+encodeURIComponent(bt)+location.hash);return;}}
+  }catch(e){}
+  try{KEYS=await fetch('keys.json?cb='+Date.now(),{cache:'no-store'}).then(r=>r.json())}catch(e){app.innerHTML='<div class="center">読み込みに失敗しました。</div>';return}
   const sk=load(LS_K);
   if(sk){try{await importStoredK(sk);await boot();return}catch(e){}}
   showUnlock();
@@ -205,13 +213,20 @@ function showUnlock(msg){
   app.innerHTML=`<div class="center"><div class="lock">
     <h2>🔒 合言葉を入力</h2>
     <p>このアプリはチーム限定です。合言葉はこの端末で最初の1回だけ。次回からは自動で開きます。</p>
-    <input id="pc" type="password" inputmode="text" placeholder="合言葉" autocomplete="off">
+    <input id="pc" type="password" inputmode="text" placeholder="合言葉" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
     <div class="err" id="err">${msg||''}</div>
     <button class="btn" id="go" style="margin-top:14px">開く</button>
   </div></div>`;
   const pc=document.getElementById('pc'),go=document.getElementById('go');
   const tryit=async()=>{go.disabled=true;document.getElementById('err').textContent='確認中…';
-    try{await unlockWith(pc.value.trim());await boot();}
+    const raw=pc.value.trim();
+    const vars=[raw];
+    if(raw.toLowerCase()!==raw)vars.push(raw.toLowerCase());
+    if(raw&&raw[0].toLowerCase()!==raw[0])vars.push(raw[0].toLowerCase()+raw.slice(1));
+    try{let ok=false,last=null;
+      for(let i=0;i<vars.length;i++){try{await unlockWith(vars[i]);ok=true;break}catch(e){last=e}}
+      if(!ok)throw last||new Error('bad');
+      await boot();}
     catch(e){go.disabled=false;showUnlock('合言葉が違います。もう一度お試しください。');}};
   go.onclick=tryit; pc.addEventListener('keydown',e=>{if(e.key==='Enter')tryit()}); pc.focus();
 }
@@ -315,6 +330,7 @@ function renderHome(){
   if(!shared){
     const wrap=document.createElement('div');wrap.className='logoutbox';
     const lab=document.createElement('div');lab.textContent=(ROLENAME[role()]||'メンバー')+'としてログイン中';
+    const ver=document.createElement('div');ver.style.cssText='font-size:10.5px;opacity:.55;margin-top:8px';ver.textContent='v'+BUILD;
     const lo=document.createElement('button');lo.type='button';lo.className='logoutbtn';lo.textContent='ログアウト';
     let armed=false,tm=null;
     lo.onclick=()=>{
@@ -324,7 +340,7 @@ function renderHome(){
       try{localStorage.removeItem(LS_K);localStorage.removeItem(LS_ADMIN);localStorage.removeItem(LS_ROLE);localStorage.removeItem(LS_PAT);localStorage.removeItem(LS_DRAFT)}catch(e){}
       location.replace(location.pathname);
     };
-    wrap.appendChild(lab);wrap.appendChild(lo);m.appendChild(wrap);
+    wrap.appendChild(lab);wrap.appendChild(lo);wrap.appendChild(ver);m.appendChild(wrap);
   }
   app.appendChild(m);
   document.getElementById('toDark').onclick=toggleDark;
@@ -407,17 +423,17 @@ function renderAdmin(){
     </div>
     <div class="share" style="border-style:solid">
       <div style="font-size:12.5px;color:var(--sub);line-height:1.5">みんな（見る側）の合言葉を変更できます。変更後、新しい端末は新しい合言葉が必要になります（すでに開けている端末はそのまま見られます）。</div>
-      <input class="search" id="npass" type="text" placeholder="新しい合言葉（見る側用）" autocomplete="off" style="margin:10px 0 8px">
+      <input class="search" id="npass" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="新しい合言葉（見る側用）" autocomplete="off" style="margin:10px 0 8px">
       <button class="btn ghost" id="npasssave" style="margin-top:0;padding:12px">合言葉を変更</button>
     </div>
     <div class="share" style="border-style:solid">
       <div style="font-size:12.5px;color:var(--sub);line-height:1.5">選曲担当の合言葉。この合言葉で入った人は、曲を選んで配信できます（トークンや合言葉の設定はできません）。<span id="dstate" style="font-weight:800;color:var(--accent)"></span></div>
-      <input class="search" id="dpass" type="text" placeholder="選曲担当の合言葉" autocomplete="off" style="margin:10px 0 8px">
+      <input class="search" id="dpass" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="選曲担当の合言葉" autocomplete="off" style="margin:10px 0 8px">
       <button class="btn ghost" id="dpasssave" style="margin-top:0;padding:12px">選曲担当の合言葉を設定</button>
     </div>
     <div class="share" style="border-style:solid">
       <div style="font-size:12.5px;color:var(--sub);line-height:1.5">楽譜管理者（司書）用の合言葉。この合言葉で入った人は、214曲すべての楽譜を見てメモを残せますが、選曲・配信はできません。<span id="lstate" style="font-weight:800;color:var(--accent)"></span></div>
-      <input class="search" id="lpass" type="text" placeholder="司書の合言葉" autocomplete="off" style="margin:10px 0 8px">
+      <input class="search" id="lpass" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="司書の合言葉" autocomplete="off" style="margin:10px 0 8px">
       <button class="btn ghost" id="lpasssave" style="margin-top:0;padding:12px">司書の合言葉を設定</button>
     </div>`;
   m.innerHTML=`<input class="search" id="q" placeholder="曲名・歌詞で検索（例：Way / 御名 / 十字架）">
