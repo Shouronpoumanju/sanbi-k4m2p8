@@ -7,6 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="今週の賛美">
 <meta name="theme-color" content="#5b4b8a">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
 <title>今週の賛美</title>
 <link rel="icon" href="data:,">
 <style>
@@ -107,13 +109,16 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='20260821a';
+const BUILD='20260821b';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
 const LS_ADMIN='ws_admin_v1',LS_ROLE='ws_role_v1';
 const NOTES_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/notes.enc';
-let NOTES=[];
+const HIST_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/history.enc';
+let NOTES=[],HIST=null,USG=null;
+function fmtD(d){const x=new Date(d);return (x.getMonth()+1)+'/'+x.getDate()}
+function calcUsage(){USG={};(HIST||[]).forEach(e=>{(e.l||[]).forEach(id=>{const u=USG[id]=USG[id]||{n:0,last:0};u.n++;if(e.d>u.last)u.last=e.d})})}
 function role(){const r=load(LS_ROLE);if(r)return r;return load(LS_ADMIN)?'admin':'viewer'}
 function isAdmin(){return role()==='admin'}
 function isLib(){return role()==='lib'}
@@ -136,6 +141,14 @@ function enc8(s){return new TextEncoder().encode(s)}
 function b64d(s){const b=atob(s);const u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u}
 function b64e(buf){let s='';const u=new Uint8Array(buf);for(let i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);return btoa(s)}
 const app=document.getElementById('app');
+
+if('serviceWorker' in navigator){try{navigator.serviceWorker.register('sw.js')}catch(e){}}
+let wlock=null;
+async function wl(on){try{
+  if(on){if(!('wakeLock' in navigator))return;wlock=await navigator.wakeLock.request('screen');wlock.addEventListener('release',()=>{wlock=null});}
+  else if(wlock){await wlock.release();wlock=null;}
+}catch(e){}}
+document.addEventListener('visibilitychange',()=>{const V0=document.getElementById('viewer');if(document.visibilityState==='visible'&&V0&&V0.classList.contains('on'))wl(true)});
 
 /* ---------- crypto ---------- */
 async function deriveKEK(passcode,saltB64,iters){
@@ -236,6 +249,7 @@ async function boot(){
   SONGS=await decJSON('data.enc');BYID={};SONGS.forEach(s=>BYID[s.id]=s);
   PUB=await fetchPub();
   if(isStaff())NOTES=await fetchNotes();
+  if(PUB&&PUB.l)setTimeout(()=>{try{PUB.l.forEach(id=>{const s0=BYID[id];if(s0)s0.pages.forEach(pp=>{fetch(pp).catch(()=>{})})})}catch(e){}},1500);
   shared=parseHash();render();
   window.addEventListener('hashchange',()=>{if(location.hash==='#reset'){try{localStorage.removeItem(LS_K);localStorage.removeItem(LS_ADMIN);localStorage.removeItem(LS_ROLE);localStorage.removeItem(LS_PAT)}catch(e){};location.reload();return}shared=parseHash();route='home';render()});
 }
@@ -272,6 +286,14 @@ async function publish(){
     const res=await fetch(REPO_API,{method:'PUT',headers:H,body:JSON.stringify(Object.assign({message:'setlist update',content:btoa(b64e(full.buffer)),branch:'main'},sha?{sha:sha}:{}))});
     if(!res.ok)throw new Error('HTTP '+res.status);
     PUB={t:draft.t,s:draft.s,l:draft.l.slice(),d:Date.now()};
+    try{const h=HIST||await fetchHist();
+      const last=h[h.length-1];
+      if(!(last&&JSON.stringify(last.l)===JSON.stringify(draft.l)&&Date.now()-last.d<43200000)){
+        h.push({t:draft.t,s:draft.s,l:draft.l.slice(),d:Date.now()});
+        while(h.length>120)h.shift();
+      }else{last.d=Date.now();last.t=draft.t;last.s=draft.s;}
+      await saveHist(h);
+    }catch(e){}
     toast('配信しました！全員に反映されます');
     const st=document.getElementById('pubstate');if(st)st.textContent='配信中：'+draft.t+'（'+draft.l.length+'曲）';
   }catch(e){toast('配信に失敗しました：'+emsg(e))}
@@ -287,6 +309,29 @@ async function fetchNotes(){
   if(!u||u.length<13)return [];
   try{const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(0,12)},CKEY,u.slice(12));
     const a=JSON.parse(new TextDecoder().decode(pt));return Array.isArray(a)?a:[];}catch(e){return []}
+}
+async function fetchHist(){
+  let u=null;
+  try{const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),6000);
+    const r=await fetch(HIST_API+'?ref=main&cb='+Date.now(),{headers:{'Accept':'application/vnd.github.raw'},cache:'no-store',signal:ac.signal});clearTimeout(tm);
+    if(r.ok)u=b64d((await r.text()).trim());}catch(e){}
+  if(!u){try{const r2=await fetch('history.enc',{cache:'no-cache'});if(r2.ok)u=b64d((await r2.text()).trim());}catch(e){}}
+  if(!u||u.length<13)return [];
+  try{const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(0,12)},CKEY,u.slice(12));
+    const a=JSON.parse(new TextDecoder().decode(pt));return Array.isArray(a)?a:[];}catch(e){return []}
+}
+async function saveHist(list){
+  const pat=load(LS_PAT);if(!pat)throw new Error('no pat');
+  const ek=await crypto.subtle.importKey('raw',b64d(load(LS_K)),{name:'AES-GCM'},false,['encrypt']);
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},ek,enc8(JSON.stringify(list))));
+  const full=new Uint8Array(12+ct.length);full.set(iv);full.set(ct,12);
+  const H={'Authorization':'Bearer '+pat,'Accept':'application/vnd.github+json'};
+  let sha=null;
+  try{const r=await fetch(HIST_API+'?ref=main&cb='+Date.now(),{headers:H,cache:'no-store'});if(r.ok)sha=(await r.json()).sha}catch(e){}
+  const res=await fetch(HIST_API,{method:'PUT',headers:H,body:JSON.stringify(Object.assign({message:'history update',content:btoa(b64e(full.buffer)),branch:'main'},sha?{sha:sha}:{}))});
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  HIST=list;calcUsage();
 }
 async function saveNotes(list){
   const pat=load(LS_PAT);
@@ -448,10 +493,13 @@ function renderAdmin(){
       <button class="btn ghost" id="copy" style="margin-top:0;padding:12px">URLをコピー</button>
       <div style="font-size:11.5px;color:var(--sub);margin-top:9px">配信後に曲を入れ替えても「配信する」を押し直せば全員に反映されます。配信から1週間経つと自動的に非表示になります。</div>
     </div>
+    <div class="secttl">過去の配信</div><div id="histbox"><div class="hint">読み込み中…</div></div>
     <div class="secttl">ライブラリ（${SONGS.length}曲）・頭文字で選ぶ</div><div class="idxbar" id="idxbar"></div><div class="lib" id="libbox"></div>
     ${SETTINGS}`;
   app.appendChild(m);
   drawSel();drawLib('');
+  (async()=>{try{if(HIST===null){HIST=await fetchHist();calcUsage();}
+    drawHist();const qv=document.getElementById('q');drawLib(qv?qv.value:'');}catch(e){const hb=document.getElementById('histbox');if(hb)hb.innerHTML='<div class="hint">履歴を読み込めませんでした</div>'}})();
   const et=document.getElementById('etitle'),es=document.getElementById('esub');
   const commit=()=>{draft.t=et.textContent.trim()||'今週の賛美';draft.s=es.textContent.trim();save(LS_DRAFT,draft)};
   et.addEventListener('blur',commit);es.addEventListener('blur',commit);
@@ -561,6 +609,17 @@ async function changeViewerPass(){
   }catch(e){toast('変更に失敗しました：'+emsg(e))}
   btn.disabled=false;btn.textContent='合言葉を変更';
 }
+function drawHist(){
+  const hb=document.getElementById('histbox');if(!hb)return;
+  const h=(HIST||[]).slice().reverse().slice(0,8);
+  if(!h.length){hb.innerHTML='<div class="hint">まだ履歴がありません。配信すると自動で記録されます。</div>';return}
+  hb.innerHTML='';
+  h.forEach(e=>{const el=document.createElement('div');el.className='song';
+    const names=(e.l||[]).map(id=>BYID[id]?BYID[id].title:null).filter(Boolean);
+    el.innerHTML=`<div class="st"><div class="t">${esc(e.s||fmtD(e.d))}（${names.length}曲）</div><div class="s">${esc(names.slice(0,3).join('・'))}${names.length>3?' ほか':''}・配信 ${fmtD(e.d)}</div></div><button class="pv" type="button">読み込む</button>`;
+    el.querySelector('.pv').onclick=()=>{draft.l=(e.l||[]).filter(id=>BYID[id]);save(LS_DRAFT,draft);drawSel();const qv=document.getElementById('q');drawLib(qv?qv.value:'');toast('このセットを読み込みました（配信するまで反映されません）');window.scrollTo({top:0,behavior:'smooth'})};
+    hb.appendChild(el);});
+}
 function drawSel(){const box=document.getElementById('selbox');if(!box)return;box.innerHTML='';const c=document.getElementById('cnt');if(c)c.textContent=draft.l.length;
   if(!draft.l.length){box.innerHTML='<div class="hint">まだ曲がありません。下のライブラリから追加してください。</div>';return}
   draft.l.forEach((id,i)=>{const s=BYID[id];if(!s)return;const el=document.createElement('div');el.className='song';
@@ -574,7 +633,9 @@ function mv(i,d){const j=i+d;if(j<0||j>=draft.l.length)return;[draft.l[i],draft.
 function GORD(g){const j='あかさたなはまやらわ'.indexOf(g);if(j>=0)return j;if(g>='A'&&g<='Z')return 10+g.charCodeAt(0)-65;return 99}
 function grpList(){return [...new Set(SONGS.map(s=>s.g))].sort((a,b)=>GORD(a)-GORD(b))}
 function libItem(s,lyric){const viewOnly=(route==='lib');const on=draft.l.includes(s.id);const el=document.createElement('div');el.className='song'+(on?' sel':'');
-  el.innerHTML=`<div class="st"><div class="t">${esc(s.title)}</div><div class="s">${s.pages.length}ページ</div></div>${lyric?'<div class="lyr">歌詞</div>':''}<button class="pv">楽譜</button>${viewOnly?'':`<button class="add">${on?'追加済':'＋ 追加'}</button>`}`;
+  let sub=s.pages.length+'ページ';
+  if(!viewOnly&&USG){const u=USG[s.id];sub+=u?`・${u.n}回・前回${fmtD(u.last)}`:'・記録なし';}
+  el.innerHTML=`<div class="st"><div class="t">${esc(s.title)}</div><div class="s">${sub}</div></div>${lyric?'<div class="lyr">歌詞</div>':''}<button class="pv">楽譜</button>${viewOnly?'':`<button class="add">${on?'追加済':'＋ 追加'}</button>`}`;
   el.querySelector('.pv').onclick=()=>openViewer([s.id],0);
   if(viewOnly){el.onclick=e=>{if(!e.target.closest('button'))openViewer([s.id],0)};}
   else el.querySelector('.add').onclick=()=>{on?draft.l.splice(draft.l.indexOf(s.id),1):draft.l.push(s.id);save(LS_DRAFT,draft);drawSel();drawLib(document.getElementById('q').value)};
@@ -603,9 +664,9 @@ function drawLib(q){const box=document.getElementById('libbox'),bar=document.get
 const V=document.getElementById('viewer');
 let vIds=[],vSong=0;
 function cur(){return BYID[vIds[vSong]]}
-function openViewer(ids,idx,page){vIds=ids;vSong=idx;buildViewer();V.classList.add('on');preload(idx+1);
+function openViewer(ids,idx,page){vIds=ids;vSong=idx;buildViewer();V.classList.add('on');wl(true);preload(idx+1);
   if(page&&page>1){setTimeout(()=>{const st=document.getElementById('stage');const sl=st?st.querySelectorAll('.slide'):[];if(sl[page-1])st.scrollTop=sl[page-1].offsetTop},250)}}
-function closeViewer(){V.classList.remove('on')}
+function closeViewer(){V.classList.remove('on');wl(false)}
 async function preload(i){const s=BYID[vIds[i]];if(!s)return;for(const p of s.pages){try{await decImg(p)}catch(e){}}}
 function buildViewer(){
   const s=cur();
