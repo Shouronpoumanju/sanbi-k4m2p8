@@ -109,7 +109,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='20260905e2';
+const BUILD='20260905e';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -753,7 +753,7 @@ function turnPage(d){const st=document.getElementById('stage');if(!st)return;con
   const p=curPage()-1+d;
   if(p<0){go(vSong-1);return}
   if(p>=sl.length){go(vSong+1);return}
-  st.scrollTo({top:sl[p].offsetTop,behavior:'smooth'})}
+  st.scrollTop=sl[p].offsetTop}
 document.addEventListener('keydown',e=>{
   if(!V.classList.contains('on'))return;
   const a=document.activeElement;if(a&&/INPUT|TEXTAREA/.test(a.tagName))return;
