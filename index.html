@@ -109,11 +109,18 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='20260821b';
+const BUILD='20260905e';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
 const LS_ADMIN='ws_admin_v1',LS_ROLE='ws_role_v1';
+const LS_EDITOR='ws_editor_v1',LS_EDITOROK='ws_editorok_v1';
+const EDITOR_DEFAULT="http://noanoMacBook-Pro.local:8790/";
+function editorURL(){return load(LS_EDITOR)||EDITOR_DEFAULT}
+function openEditorNow(u){save(LS_EDITOROK,1);try{window.open(u,'_blank','noopener')}catch(e){location.href=u}}
+function editorSheet(){const S=document.getElementById('sheet');S.innerHTML='<div class="sheetbox">'+'<h3 style="margin:0 0 6px">\u{1F3BC} \u30b3\u30fc\u30c9\u3092\u7f6e\u304f</h3>'+'<p class="hint">\u6b4c\u8a5e\u306e\u4e0a\u306b\u30b3\u30fc\u30c9\u3092\u7f6e\u304f\u753b\u9762\u3092\u3072\u3089\u304d\u307e\u3059\u3002'+'Mac\u304c\u8d77\u304d\u3066\u3044\u3066\u3001\u540c\u3058Wi-Fi\u306b\u3064\u306a\u304c\u3063\u3066\u3044\u308b\u3068\u304d\u306b\u4f7f\u3048\u307e\u3059\u3002</p>'+'<input class="search" id="edu" spellcheck="false" autocapitalize="none" value="'+esc(editorURL())+'">'+'<button class="btn" id="edgo">\u3072\u3089\u304f</button>'+'<button class="btn ghost" id="edx">\u3084\u3081\u308b</button></div>';S.classList.add('on');document.getElementById('edx').onclick=()=>S.classList.remove('on');document.getElementById('edgo').onclick=()=>{const v=document.getElementById('edu').value.trim();if(!v)return;save(LS_EDITOR,v);S.classList.remove('on');openEditorNow(v);};}
+function openEditor(){if(load(LS_EDITOROK))return openEditorNow(editorURL());editorSheet();}
+
 const NOTES_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/notes.enc';
 const HIST_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/history.enc';
 let NOTES=[],HIST=null,USG=null;
@@ -372,6 +379,7 @@ function renderHome(){
   if(!shared&&isStaff()){
     const lb=document.createElement('button');lb.className='btn ghost';lb.textContent='📚 楽譜ライブラリ（'+SONGS.length+'曲）';lb.onclick=()=>{route='lib';render()};m.appendChild(lb);
     const nb=document.createElement('button');nb.className='btn ghost';nb.textContent='🚩 気づきメモ'+(openCount()?'（'+openCount()+'件）':'');nb.onclick=()=>{route='notes';render()};m.appendChild(nb);
+    const eb=document.createElement('button');eb.className='btn ghost';eb.textContent='\u{1F3BC} \u30b3\u30fc\u30c9\u3092\u7f6e\u304f';eb.onclick=openEditor;eb.oncontextmenu=(ev)=>{ev.preventDefault();editorSheet()};m.appendChild(eb);
   }
   if(!shared){
     const wrap=document.createElement('div');wrap.className='logoutbox';
