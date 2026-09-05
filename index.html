@@ -100,7 +100,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 .slide.zoom{overflow:auto}
 .slide.zoom img{max-width:none;max-height:none;width:190%;object-fit:unset}
 .pageflag{position:absolute;top:calc(7px + env(safe-area-inset-top));right:9px;background:rgba(0,0,0,.5);color:#fff;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;pointer-events:none;z-index:3}
-.edge{position:absolute;top:0;bottom:0;width:15%;z-index:2}.edge.l{left:0}.edge.r{right:0}.stage.two{display:grid;grid-template-columns:1fr 1fr;align-content:start;column-gap:2px}.stage.two .slide.load{min-height:50vh}.turnbtn{position:absolute;left:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:6;height:34px;border-radius:17px;border:none;background:rgba(20,18,30,.42);color:#fff;font-size:12px;font-weight:700;padding:0 12px;cursor:pointer;transition:opacity .35s}.turnbtn.hid{opacity:0;pointer-events:none}
+.edge{position:absolute;top:0;bottom:0;width:15%;z-index:2}.edge.l{left:0}.edge.r{right:0}.stage.two{display:grid;grid-template-columns:1fr 1fr;align-content:start;column-gap:2px}.stage.two .slide.load{min-height:50vh}.turnbtn{position:absolute;left:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:6;height:34px;border-radius:17px;border:none;background:rgba(20,18,30,.42);color:#fff;font-size:12px;font-weight:700;padding:0 12px;cursor:pointer;transition:opacity .35s}.turnbtn.hid{opacity:0;pointer-events:none}.slide.scan{display:none}.stage.showscan .slide.scan{display:block}
 </style>
 </head>
 <body>
@@ -109,7 +109,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='20260905e';
+const BUILD='202609050936';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -134,7 +134,7 @@ function canSelect(){return isAdmin()||isLead()}
 function isStaff(){return isAdmin()||isLib()||isLead()}
 const ROLENAME={admin:'管理者',lead:'選曲担当',lib:'司書（楽譜管理）',viewer:'メンバー'};
 let PUB=null;
-let SONGS=[],BYID={},route='home',CKEY=null,KEYS=null,libGrp=null;
+let SONGS=[],BYID={},route='home',CKEY=null,KEYS=null,libGrp=null;let PAGEINFO={};const LS_SCAN='ws_scan_v1',LS_PAGEINFO='ws_pageinfo_v1';
 let dark=load(LS_DARK)||false; if(dark)document.documentElement.classList.add('dark');
 let shared=null;
 let draft=load(LS_DRAFT)||{t:'今週の賛美',s:nextSunday()+' 礼拝',l:[]};
@@ -253,7 +253,7 @@ function showUnlock(msg){
 }
 async function boot(){
   app.innerHTML='<div class="center"><div class="spin"></div><div>展開中…</div></div>';
-  SONGS=await decJSON('data.enc');BYID={};SONGS.forEach(s=>BYID[s.id]=s);
+  SONGS=await decJSON('data.enc');BYID={};SONGS.forEach(s=>BYID[s.id]=s);try{PAGEINFO=await decJSON('pages.enc')||{}}catch(e){PAGEINFO={}}
   PUB=await fetchPub();
   if(isStaff())NOTES=await fetchNotes();
   if(PUB&&PUB.l)setTimeout(()=>{try{PUB.l.forEach(id=>{const s0=BYID[id];if(s0)s0.pages.forEach(pp=>{fetch(pp).catch(()=>{})})})}catch(e){}},1500);
@@ -373,7 +373,7 @@ function renderHome(){
   else if(!cur.ids.length){m.innerHTML=`<div class="center" style="min-height:40vh">まだ曲がありません。</div>`;}
   else{m.innerHTML=`<div class="hint">曲をタップ → 全体表示。画面の下側をタップで次のページ、上側で前のページ（足踏みペダルや矢印キーでも送れます）</div>`;
     cur.ids.forEach((id,i)=>{const s=BYID[id];const el=document.createElement('div');el.className='song';
-      el.innerHTML=`<div class="num">${i+1}</div><div class="st"><div class="t">${esc(s.title)}</div></div><div class="pg">${s.pages.length}p</div><div class="chev">›</div>`;
+      el.innerHTML=`<div class="num">${i+1}</div><div class="st"><div class="t">${esc(s.title)}</div></div><div class="pg">${(PAGEINFO[s.id]||s.pages.length)}p</div><div class="chev">›</div>`;
       el.onclick=()=>openViewer(cur.ids,i);m.appendChild(el);});}
   if(!shared&&canSelect()){const b=document.createElement('button');b.className='btn ghost';b.textContent='＋ 選曲する（管理）';b.onclick=()=>{route='admin';render()};m.appendChild(b);}
   if(!shared&&isStaff()){
@@ -678,15 +678,15 @@ function closeViewer(){V.classList.remove('on');wl(false)}
 async function preload(i){const s=BYID[vIds[i]];if(!s)return;for(const p of s.pages){try{await decImg(p)}catch(e){}}}
 function buildViewer(){
   const s=cur();
-  const slides=s.pages.map((p,pi)=>`<div class="slide load"><img data-enc="${p}" alt="">${s.pages.length>1?`<div class="pageflag">${pi+1} / ${s.pages.length}</div>`:''}</div>`).join('');
+  const nt=PAGEINFO[s.id]||0;const slides=s.pages.map((p,pi)=>`<div class="slide load${(nt&&pi>=nt)?' scan':''}"><img data-enc="${p}" alt="">${s.pages.length>1?`<div class="pageflag">${pi+1} / ${s.pages.length}</div>`:''}</div>`).join('');
   V.innerHTML=`<div class="stage" id="stage">${slides}<div class="edge l" id="el"></div><div class="edge r" id="er"></div></div>
-   <button class="vclose" id="vx" aria-label="閉じる">✕</button>${s.pages.length>1?'<button class="turnbtn hid" id="vtwo">\u898b\u958b\u304d</button>':''}${isStaff()?'<button class="flagbtn" id="vflag" aria-label="メモ">🚩</button>':''}`;
+   <button class="vclose" id="vx" aria-label="閉じる">✕</button>${s.pages.length>1?'<button class="turnbtn hid" id="vtwo">\u898b\u958b\u304d</button>':''}${(nt&&s.pages.length>nt)?'<button class="turnbtn hid" id="vscan" style="left:auto;right:66px">\u4e94\u7dda\u8b5c</button>':''}${isStaff()?'<button class="flagbtn" id="vflag" aria-label="メモ">🚩</button>':''}`;
   const stage=document.getElementById('stage');stage.scrollTop=0;
   hydrate();
   const vx=document.getElementById('vx');
   vx.onclick=e=>{e.stopPropagation();closeViewer()};
   const vf=document.getElementById('vflag');
-  const poke=()=>{vx.classList.remove('hid');if(vf)vf.classList.remove('hid');const tb=document.getElementById('vtwo');if(tb)tb.classList.remove('hid');clearTimeout(vx._h);vx._h=setTimeout(()=>{vx.classList.add('hid');if(vf)vf.classList.add('hid');const tb2=document.getElementById('vtwo');if(tb2)tb2.classList.add('hid')},2500)};
+  const poke=()=>{vx.classList.remove('hid');if(vf)vf.classList.remove('hid');const tb=document.getElementById('vtwo');if(tb)tb.classList.remove('hid');const sb0=document.getElementById('vscan');if(sb0)sb0.classList.remove('hid');clearTimeout(vx._h);vx._h=setTimeout(()=>{vx.classList.add('hid');if(vf)vf.classList.add('hid');const tb2=document.getElementById('vtwo');if(tb2)tb2.classList.add('hid');const sb2=document.getElementById('vscan');if(sb2)sb2.classList.add('hid')},2500)};
   poke();
   stage.addEventListener('click',poke);
   if(vf)vf.onclick=e=>{e.stopPropagation();openNoteSheet()};
@@ -697,6 +697,12 @@ function buildViewer(){
   const applyTwo=()=>{const on=!!load(LS_TWO)&&window.innerWidth>window.innerHeight&&s.pages.length>1;stage.classList.toggle('two',on);if(two)two.textContent=on?'1ページずつ':'見開き'};
   if(two){two.onclick=e=>{e.stopPropagation();save(LS_TWO,!load(LS_TWO));applyTwo();poke()};}
   applyTwo();window.__ws_two=applyTwo;
+  const sb=document.getElementById('vscan');
+  const applyScan=()=>{const on=!!load(LS_SCAN);stage.classList.toggle('showscan',on);if(sb)sb.textContent=on?'五線譜を隠す':'五線譜';
+    const vis=[...stage.querySelectorAll('.slide')].filter(x=>!x.classList.contains('scan')||on);
+    vis.forEach((x,i)=>{const f=x.querySelector('.pageflag');if(f){f.textContent=(i+1)+' / '+vis.length;f.style.display=vis.length>1?'':'none'}});};
+  if(sb){sb.onclick=e=>{e.stopPropagation();save(LS_SCAN,!load(LS_SCAN));applyScan();poke()};}
+  applyScan();
   let tapT=null,lastTap=0;
   stage.addEventListener('click',e=>{
     if(e.target.closest('.edge')||e.target.closest('button'))return;
@@ -713,7 +719,7 @@ function buildViewer(){
   stage.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
   stage.addEventListener('touchend',e=>{if(stage.querySelector('.slide.zoom'))return;const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.6)go(vSong+(dx<0?1:-1))},{passive:true});
 }
-function curPage(){const st=document.getElementById('stage');if(!st)return 1;const sl=[...st.querySelectorAll('.slide')];let best=1,bd=1e9;sl.forEach((s,i)=>{const d=Math.abs(s.offsetTop-st.scrollTop);if(d<bd){bd=d;best=i+1}});return best}
+function curPage(){const st=document.getElementById('stage');if(!st)return 1;const sl=[...st.querySelectorAll('.slide')].filter(x=>x.offsetParent!==null);let best=1,bd=1e9;sl.forEach((s,i)=>{const d=Math.abs(s.offsetTop-st.scrollTop);if(d<bd){bd=d;best=i+1}});return best}
 let noteCat=CATS[0];
 function openNoteSheet(){
   const s=cur();if(!s)return;
@@ -748,7 +754,7 @@ function go(i){if(i<0||i>=vIds.length)return;vSong=i;buildViewer();preload(i+1)}
 function zoom(img){const sl=img.parentElement,st=document.getElementById('stage');if(sl.classList.toggle('zoom')){st.style.scrollSnapType='none'}else{st.style.scrollSnapType='y mandatory';sl.scrollTop=0;sl.scrollLeft=0}}
 
 const LS_TWO='ws_two_v1';
-function turnPage(d){const st=document.getElementById('stage');if(!st)return;const sl=[...st.querySelectorAll('.slide')];if(!sl.length)return;
+function turnPage(d){const st=document.getElementById('stage');if(!st)return;const sl=[...st.querySelectorAll('.slide')].filter(x=>x.offsetParent!==null);if(!sl.length)return;
   if(st.classList.contains('two'))d*=2;
   const p=curPage()-1+d;
   if(p<0){go(vSong-1);return}
