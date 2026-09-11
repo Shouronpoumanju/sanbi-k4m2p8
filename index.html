@@ -100,7 +100,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 .slide.zoom{overflow:auto}
 .slide.zoom img{max-width:none;max-height:none;width:190%;object-fit:unset}
 .pageflag{position:absolute;top:calc(7px + env(safe-area-inset-top));right:9px;background:rgba(0,0,0,.5);color:#fff;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;pointer-events:none;z-index:3}
-.edge{position:absolute;top:0;bottom:0;width:15%;z-index:2}.edge.l{left:0}.edge.r{right:0}.stage.two{display:grid;grid-template-columns:1fr 1fr;align-content:start;column-gap:2px}.stage.two .slide.load{min-height:50vh}.turnbtn{position:absolute;left:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:6;height:34px;border-radius:17px;border:none;background:rgba(20,18,30,.42);color:#fff;font-size:12px;font-weight:700;padding:0 12px;cursor:pointer;transition:opacity .35s}.turnbtn.hid{opacity:0;pointer-events:none}.vgear{position:absolute;top:calc(8px + env(safe-area-inset-top));right:10px;z-index:6;width:34px;height:34px;border-radius:50%;border:none;background:rgba(20,18,30,.26);color:rgba(255,255,255,.92);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}.pageflag{top:calc(48px + env(safe-area-inset-top))}.vset label{display:flex;align-items:center;gap:10px;padding:12px 4px;font-size:15px;border-top:1px solid var(--line)}.vset label:first-of-type{border-top:none}.vset input{width:22px;height:22px}.vset .d{font-size:12px;color:var(--sub);margin-top:2px}.vedit{right:52px;font-size:15px}.slide.scan{display:none}.stage.showscan .slide.scan{display:block}
+.edge{position:absolute;top:0;bottom:0;width:15%;z-index:2}.edge.l{left:0}.edge.r{right:0}.stage.two{display:grid;grid-template-columns:1fr 1fr;align-content:start;column-gap:2px}.stage.two .slide.load{min-height:50vh}.turnbtn{position:absolute;left:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:6;height:34px;border-radius:17px;border:none;background:rgba(20,18,30,.42);color:#fff;font-size:12px;font-weight:700;padding:0 12px;cursor:pointer;transition:opacity .35s}.turnbtn.hid{opacity:0;pointer-events:none}.vgear{position:absolute;top:calc(8px + env(safe-area-inset-top));right:10px;z-index:6;width:34px;height:34px;border-radius:50%;border:none;background:rgba(20,18,30,.26);color:rgba(255,255,255,.92);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}.pageflag{top:calc(48px + env(safe-area-inset-top))}.vset label{display:flex;align-items:center;gap:10px;padding:12px 4px;font-size:15px;border-top:1px solid var(--line)}.vset label:first-of-type{border-top:none}.vset input{width:22px;height:22px}.vset .d{font-size:12px;color:var(--sub);margin-top:2px}.vedit{right:52px;font-size:15px}.slide.scan{display:none}.stage.showscan .slide.scan{display:block}.slide.off{display:none !important}.slide.on{display:block !important}.vset .pl{margin-top:8px;border-top:1px solid var(--line);padding-top:6px}.vset .pl label{padding:8px 4px;border-top:none}.vset .pl .h{font-size:13px;color:var(--sub);margin:4px 0}
 </style>
 </head>
 <body>
@@ -109,7 +109,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='202609111845';
+const BUILD='202609111920';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -678,7 +678,7 @@ function closeViewer(){V.classList.remove('on');wl(false)}
 async function preload(i){const s=BYID[vIds[i]];if(!s)return;for(const p of s.pages){try{await decImg(p)}catch(e){}}}
 function buildViewer(){
   const s=cur();
-  const nt=PAGEINFO[s.id]||0;const slides=s.pages.map((p,pi)=>`<div class="slide load${(nt&&pi>=nt)?' scan':''}"><img data-enc="${p}" alt="">${s.pages.length>1?`<div class="pageflag">${pi+1} / ${s.pages.length}</div>`:''}</div>`).join('');
+  const nt=PAGEINFO[s.id]||0;const slides=s.pages.map((p,pi)=>`<div class="slide load${(nt&&pi>=nt)?' scan':''}${pageSelClass(s.id,pi)}"><img data-enc="${p}" alt="">${s.pages.length>1?`<div class="pageflag">${pi+1} / ${s.pages.length}</div>`:''}</div>`).join('');
   V.innerHTML=`<div class="stage" id="stage">${slides}<div class="edge l" id="el"></div><div class="edge r" id="er"></div></div>
    <button class="vclose" id="vx" aria-label="閉じる">✕</button><button class="vgear" id="vgear" aria-label="表示の設定">⚙</button>${isStaff()?'<button class="vgear vedit" id="vedit" aria-label="この楽譜を直す">✎</button>':''}${s.pages.length>1?'<button class="turnbtn hid" id="vtwo">\u898b\u958b\u304d</button>':''}${(nt&&s.pages.length>nt)?'<button class="turnbtn hid" id="vscan" style="left:auto;right:66px">\u4e94\u7dda\u8b5c</button>':''}${isStaff()?'<button class="flagbtn" id="vflag" aria-label="メモ">🚩</button>':''}`;
   const stage=document.getElementById('stage');stage.scrollTop=0;
@@ -778,6 +778,15 @@ document.addEventListener('keydown',e=>{
 });
 window.addEventListener('resize',()=>{if(window.__ws_two)window.__ws_two()});
 
+
+const LS_PSEL='ws_psel_v1';
+function pageSel(id){try{const m=load(LS_PSEL)||{};const v=m[id];return Array.isArray(v)&&v.length?v:null}catch(e){return null}}
+function setPageSel(id,arr,total){const m=load(LS_PSEL)||{};if(!arr||arr.length===0||arr.length>=total)delete m[id];else m[id]=arr;save(LS_PSEL,m);}
+function pageSelClass(id,pi){const sel=pageSel(id);return sel?(sel.includes(pi)?' on':' off'):''}
+function pageLabel(nt,pi,total){if(nt&&pi>=nt)return '五線譜（元の楽譜）'+(total-nt>1?' '+(pi-nt+1):'');return '清書'+(nt>1?' '+(pi+1):'')}
+function applyPageSel(){const st=document.getElementById('stage');const s=cur();if(!st||!s)return;const sel=pageSel(s.id);
+  [...st.querySelectorAll('.slide')].forEach((el,i)=>{el.classList.toggle('on',!!sel&&sel.includes(i));el.classList.toggle('off',!!sel&&!sel.includes(i));});
+  if(window.__ws_two)window.__ws_two();}
 const LS_VSET='ws_vset_v1';/* ws_edit_v1 */
 function openViewSettings(){
   const sh=document.getElementById('sheet');
@@ -787,14 +796,18 @@ function openViewSettings(){
     <h3>表示の設定</h3><div class="sub">この端末だけの設定です（奏者ごとに選べます）</div>
     <div style="margin-top:10px">
     <label><input type="checkbox" id="vs_two"${two?' checked':''}><div>見開き（2ページを横に並べる）<div class="d">横向きのときだけ効きます</div></div></label>
-    <label><input type="checkbox" id="vs_scan"${scan?' checked':''}><div>五線譜（元のスキャン）も表示する<div class="d">普段は清書の頁だけ。楽器の方は出しておくと便利です</div></div></label>
+    <label><input type="checkbox" id="vs_scan"${scan?' checked':''}><div>五線譜（元のスキャン）も表示する<div class="d">普段は清書の頁だけ。楽器の方は出しておくと便利です</div></div></label>${(()=>{if(!s)return '';const sel=pageSel(s.id);return `<div class="pl"><div class="h">この曲で表示するページ（この端末だけ）</div>`+s.pages.map((p,i)=>`<label><input type="checkbox" class="vs_pg" data-i="${i}"${(sel?sel.includes(i):(!nt||i<nt||scan))?' checked':''}><div>${i+1}. ${pageLabel(nt,i,s.pages.length)}</div></label>`).join('')+`</div>`})()}
     </div>
     <div class="hint" style="margin-top:10px">ページ送り：画面の下側タップ＝次、上側＝前。足踏みペダルや矢印キーでも送れます。</div>
     <button class="btn" id="vs_ok" style="margin-top:8px">閉じる</button></div>`;
   sh.classList.add('on');
   document.getElementById('vs_two').onchange=e=>{save(LS_TWO,e.target.checked);if(window.__ws_two)window.__ws_two()};
   document.getElementById('vs_scan').onchange=e=>{save(LS_SCAN,e.target.checked);const st=document.getElementById('stage');if(st){const b=document.getElementById('vscan');if(b)b.click();else{st.classList.toggle('showscan',e.target.checked)}}};
-  document.getElementById('vs_ok').onclick=()=>sh.classList.remove('on');
+  
+  [...document.querySelectorAll('.vs_pg')].forEach(cb=>{cb.onchange=()=>{const arr=[...document.querySelectorAll('.vs_pg')].filter(x=>x.checked).map(x=>+x.dataset.i);
+    if(!arr.length){cb.checked=true;return;}
+    setPageSel(s.id,arr,s.pages.length);applyPageSel();}});
+document.getElementById('vs_ok').onclick=()=>sh.classList.remove('on');
   sh.onclick=e=>{if(e.target===sh)sh.classList.remove('on')};
 }
 function toggleDark(){dark=!dark;document.documentElement.classList.toggle('dark',dark);save(LS_DARK,dark);const b=document.getElementById('toDark');if(b)b.textContent=dark?'☀️':'🌙'}
