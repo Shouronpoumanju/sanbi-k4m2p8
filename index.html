@@ -109,7 +109,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='202609111920';
+const BUILD='202609112226';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -119,7 +119,27 @@ const EDITOR_DEFAULT="http://noanoMacBook-Pro.local:8790/";
 function editorURL(){return load(LS_EDITOR)||EDITOR_DEFAULT}
 function openEditorNow(u){save(LS_EDITOROK,1);try{window.open(u,'_blank','noopener')}catch(e){location.href=u}}
 function editorSheet(){const S=document.getElementById('sheet');S.innerHTML='<div class="sheetbox">'+'<h3 style="margin:0 0 6px">\u{1F3BC} \u30b3\u30fc\u30c9\u3092\u7f6e\u304f</h3>'+'<p class="hint">\u6b4c\u8a5e\u306e\u4e0a\u306b\u30b3\u30fc\u30c9\u3092\u7f6e\u304f\u753b\u9762\u3092\u3072\u3089\u304d\u307e\u3059\u3002'+'Mac\u304c\u8d77\u304d\u3066\u3044\u3066\u3001\u540c\u3058Wi-Fi\u306b\u3064\u306a\u304c\u3063\u3066\u3044\u308b\u3068\u304d\u306b\u4f7f\u3048\u307e\u3059\u3002</p>'+'<input class="search" id="edu" spellcheck="false" autocapitalize="none" value="'+esc(editorURL())+'">'+'<button class="btn" id="edgo">\u3072\u3089\u304f</button>'+'<button class="btn ghost" id="edx">\u3084\u3081\u308b</button></div>';S.classList.add('on');document.getElementById('edx').onclick=()=>S.classList.remove('on');document.getElementById('edgo').onclick=()=>{const v=document.getElementById('edu').value.trim();if(!v)return;save(LS_EDITOR,v);S.classList.remove('on');openEditorNow(v);};}
-function openEditor(){if(load(LS_EDITOROK))return openEditorNow(editorURL());editorSheet();}
+function openEditor(){editorChooser('')}
+let EDITORINFO=null; /* ws_edurl_v1 */
+async function loadEditorInfo(){try{EDITORINFO=await decJSON('editor.enc')}catch(e){EDITORINFO=null}return EDITORINFO}
+function editorChooser(sid){
+  const S=document.getElementById('sheet');
+  const nameU=editorURL(); const ipU=(EDITORINFO&&EDITORINFO.ip)||'';
+  const q=sid?('?sid='+encodeURIComponent(sid)):'';
+  const j=u=>u.replace(/[?#].*$/,'').replace(/\/?$/,'/')+q;
+  S.innerHTML='<div class="sheetbox"><h3 style="margin:0 0 6px">\u{1F3BC} \u30b3\u30fc\u30c9\u3092\u7f6e\u304f</h3>'
+   +'<p class="hint">Mac\u304c\u8d77\u304d\u3066\u3044\u3066\u3001iPad\u304c\u540c\u3058Wi-Fi\u306b\u3064\u306a\u304c\u3063\u3066\u3044\u308b\u3068\u304d\u306b\u4f7f\u3048\u307e\u3059\u3002\u958b\u3051\u306a\u3044\u3068\u304d\u306f\u3082\u3046\u4e00\u65b9\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044\u3002</p>'
+   +'<button class="btn" id="ed1">\u540d\u524d\u3067\u958b\u304f<div class="d" style="font-size:11px;font-weight:400;opacity:.8">'+esc(nameU)+'</div></button>'
+   +(ipU?'<button class="btn" id="ed2" style="margin-top:8px">\u756a\u53f7\u3067\u958b\u304f<div class="d" style="font-size:11px;font-weight:400;opacity:.8">'+esc(ipU)+(EDITORINFO.at?'\uff08'+new Date(EDITORINFO.at*1000).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+' \u6642\u70b9\uff09':'')+'</div></button>':'<p class="hint">\u756a\u53f7\u306e\u63a7\u3048\u306f\u307e\u3060\u3042\u308a\u307e\u305b\u3093\uff08Mac\u3067\u4e00\u5ea6\u540c\u671f\u3059\u308b\u3068\u51fa\u307e\u3059\uff09</p>')
+   +'<button class="btn ghost" id="ed3" style="margin-top:8px">\u4f4f\u6240\u3092\u81ea\u5206\u3067\u5165\u308c\u308b</button>'
+   +'<button class="btn ghost" id="edx" style="margin-top:8px">\u3084\u3081\u308b</button></div>';
+  S.classList.add('on');
+  document.getElementById('edx').onclick=()=>S.classList.remove('on');
+  document.getElementById('ed1').onclick=()=>{S.classList.remove('on');openEditorNow(j(nameU))};
+  const b2=document.getElementById('ed2'); if(b2)b2.onclick=()=>{S.classList.remove('on');openEditorNow(j(ipU))};
+  document.getElementById('ed3').onclick=()=>editorSheet();
+}
+
 
 const NOTES_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/notes.enc';
 const HIST_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/history.enc';
@@ -253,7 +273,7 @@ function showUnlock(msg){
 }
 async function boot(){
   app.innerHTML='<div class="center"><div class="spin"></div><div>展開中…</div></div>';
-  SONGS=await decJSON('data.enc');BYID={};SONGS.forEach(s=>BYID[s.id]=s);try{PAGEINFO=await decJSON('pages.enc')||{}}catch(e){PAGEINFO={}}
+  SONGS=await decJSON('data.enc');BYID={};SONGS.forEach(s=>BYID[s.id]=s);try{PAGEINFO=await decJSON('pages.enc')||{}}catch(e){PAGEINFO={}}loadEditorInfo();
   PUB=await fetchPub();
   if(isStaff())NOTES=await fetchNotes();
   if(PUB&&PUB.l)setTimeout(()=>{try{PUB.l.forEach(id=>{const s0=BYID[id];if(s0)s0.pages.forEach(pp=>{fetch(pp).catch(()=>{})})})}catch(e){}},1500);
@@ -701,8 +721,7 @@ function buildViewer(){
   if(vg){vg.onclick=e=>{e.stopPropagation();openViewSettings()};}
   const ve=document.getElementById('vedit');
   if(ve){ve.onclick=e=>{e.stopPropagation();const s=cur();if(!s)return;
-    const base=editorURL().replace(/[?#].*$/,'').replace(/\/?$/,'/');
-    openEditorNow(base+'?sid='+encodeURIComponent(s.id))};}
+    editorChooser(s.id)};}
 
 
   const sb=document.getElementById('vscan');
