@@ -100,7 +100,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 .slide.zoom{overflow:auto}
 .slide.zoom img{max-width:none;max-height:none;width:190%;object-fit:unset}
 .pageflag{position:absolute;top:calc(7px + env(safe-area-inset-top));right:9px;background:rgba(0,0,0,.5);color:#fff;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;pointer-events:none;z-index:3}
-.edge{position:absolute;top:0;bottom:0;width:15%;z-index:2}.edge.l{left:0}.edge.r{right:0}.stage.two{display:grid;grid-template-columns:1fr 1fr;align-content:start;column-gap:2px}.stage.two .slide.load{min-height:50vh}.turnbtn{position:absolute;left:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:6;height:34px;border-radius:17px;border:none;background:rgba(20,18,30,.42);color:#fff;font-size:12px;font-weight:700;padding:0 12px;cursor:pointer;transition:opacity .35s}.turnbtn.hid{opacity:0;pointer-events:none}.vgear{position:absolute;top:calc(8px + env(safe-area-inset-top));right:10px;z-index:6;width:34px;height:34px;border-radius:50%;border:none;background:rgba(20,18,30,.26);color:rgba(255,255,255,.92);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}.pageflag{top:calc(48px + env(safe-area-inset-top))}.vset label{display:flex;align-items:center;gap:10px;padding:12px 4px;font-size:15px;border-top:1px solid var(--line)}.vset label:first-of-type{border-top:none}.vset input{width:22px;height:22px}.vset .d{font-size:12px;color:var(--sub);margin-top:2px}.slide.scan{display:none}.stage.showscan .slide.scan{display:block}
+.edge{position:absolute;top:0;bottom:0;width:15%;z-index:2}.edge.l{left:0}.edge.r{right:0}.stage.two{display:grid;grid-template-columns:1fr 1fr;align-content:start;column-gap:2px}.stage.two .slide.load{min-height:50vh}.turnbtn{position:absolute;left:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:6;height:34px;border-radius:17px;border:none;background:rgba(20,18,30,.42);color:#fff;font-size:12px;font-weight:700;padding:0 12px;cursor:pointer;transition:opacity .35s}.turnbtn.hid{opacity:0;pointer-events:none}.vgear{position:absolute;top:calc(8px + env(safe-area-inset-top));right:10px;z-index:6;width:34px;height:34px;border-radius:50%;border:none;background:rgba(20,18,30,.26);color:rgba(255,255,255,.92);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}.pageflag{top:calc(48px + env(safe-area-inset-top))}.vset label{display:flex;align-items:center;gap:10px;padding:12px 4px;font-size:15px;border-top:1px solid var(--line)}.vset label:first-of-type{border-top:none}.vset input{width:22px;height:22px}.vset .d{font-size:12px;color:var(--sub);margin-top:2px}.vedit{right:52px;font-size:15px}.slide.scan{display:none}.stage.showscan .slide.scan{display:block}
 </style>
 </head>
 <body>
@@ -109,7 +109,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='202609051959';
+const BUILD='202609111845';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -680,7 +680,7 @@ function buildViewer(){
   const s=cur();
   const nt=PAGEINFO[s.id]||0;const slides=s.pages.map((p,pi)=>`<div class="slide load${(nt&&pi>=nt)?' scan':''}"><img data-enc="${p}" alt="">${s.pages.length>1?`<div class="pageflag">${pi+1} / ${s.pages.length}</div>`:''}</div>`).join('');
   V.innerHTML=`<div class="stage" id="stage">${slides}<div class="edge l" id="el"></div><div class="edge r" id="er"></div></div>
-   <button class="vclose" id="vx" aria-label="閉じる">✕</button><button class="vgear" id="vgear" aria-label="表示の設定">⚙</button>${s.pages.length>1?'<button class="turnbtn hid" id="vtwo">\u898b\u958b\u304d</button>':''}${(nt&&s.pages.length>nt)?'<button class="turnbtn hid" id="vscan" style="left:auto;right:66px">\u4e94\u7dda\u8b5c</button>':''}${isStaff()?'<button class="flagbtn" id="vflag" aria-label="メモ">🚩</button>':''}`;
+   <button class="vclose" id="vx" aria-label="閉じる">✕</button><button class="vgear" id="vgear" aria-label="表示の設定">⚙</button>${isStaff()?'<button class="vgear vedit" id="vedit" aria-label="この楽譜を直す">✎</button>':''}${s.pages.length>1?'<button class="turnbtn hid" id="vtwo">\u898b\u958b\u304d</button>':''}${(nt&&s.pages.length>nt)?'<button class="turnbtn hid" id="vscan" style="left:auto;right:66px">\u4e94\u7dda\u8b5c</button>':''}${isStaff()?'<button class="flagbtn" id="vflag" aria-label="メモ">🚩</button>':''}`;
   const stage=document.getElementById('stage');stage.scrollTop=0;
   hydrate();
   const vx=document.getElementById('vx');
@@ -699,6 +699,11 @@ function buildViewer(){
   applyTwo();window.__ws_two=applyTwo;
   const vg=document.getElementById('vgear');
   if(vg){vg.onclick=e=>{e.stopPropagation();openViewSettings()};}
+  const ve=document.getElementById('vedit');
+  if(ve){ve.onclick=e=>{e.stopPropagation();const s=cur();if(!s)return;
+    const base=editorURL().replace(/[?#].*$/,'').replace(/\/?$/,'/');
+    openEditorNow(base+'?sid='+encodeURIComponent(s.id))};}
+
 
   const sb=document.getElementById('vscan');
   const applyScan=()=>{const on=!!load(LS_SCAN);stage.classList.toggle('showscan',on);if(sb)sb.textContent=on?'五線譜を隠す':'五線譜';
@@ -773,7 +778,7 @@ document.addEventListener('keydown',e=>{
 });
 window.addEventListener('resize',()=>{if(window.__ws_two)window.__ws_two()});
 
-const LS_VSET='ws_vset_v1';
+const LS_VSET='ws_vset_v1';/* ws_edit_v1 */
 function openViewSettings(){
   const sh=document.getElementById('sheet');
   const s=cur(); const nt=(s&&PAGEINFO[s.id])||0;
