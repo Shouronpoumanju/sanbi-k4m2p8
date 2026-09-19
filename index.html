@@ -109,7 +109,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='202609112226';
+const BUILD='202609192010';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -511,7 +511,9 @@ function renderAdmin(){
       <input class="search" id="lpass" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="司書の合言葉" autocomplete="off" style="margin:10px 0 8px">
       <button class="btn ghost" id="lpasssave" style="margin-top:0;padding:12px">司書の合言葉を設定</button>
     </div>`;
-  m.innerHTML=`<input class="search" id="q" placeholder="曲名・歌詞で検索（例：Way / 御名 / 十字架）">
+  const NOYOMI=SONGS.filter(s=>/[一-龥]/.test(s.y||'')).length;
+  const YWARN=NOYOMI?('<div class="hint" style="color:#c0392b;font-weight:700">⚠ 読み未設定の曲が'+NOYOMI+'曲あります（目次で正しい行に入りません）</div>'):'';
+  m.innerHTML=`${YWARN}<input class="search" id="q" placeholder="曲名・歌詞で検索（例：Way / 御名 / 十字架）">
     <div class="secttl">今週のセット（<span id="cnt">${draft.l.length}</span>曲）・「楽譜」で中身を確認</div><div id="selbox"></div>
     <button class="btn gold" id="pub">📡 配信する／変更を反映</button>
     <div class="hint" id="pubstate">${PUB?'配信中：'+esc(PUB.t)+'（'+PUB.l.length+'曲）':'まだ配信されていません'}</div>
