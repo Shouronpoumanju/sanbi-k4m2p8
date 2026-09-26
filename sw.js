@@ -1,4 +1,4 @@
-const CACHE='sanbi-v1';
+const CACHE='sanbi-v2';
 self.addEventListener('install',e=>{self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(self.clients.claim())});
 self.addEventListener('fetch',e=>{
@@ -8,8 +8,8 @@ self.addEventListener('fetch',e=>{
   if(u.pathname.endsWith('/build.txt'))return;
   const isPage=/\/s\d{3}-\d+\.enc$/.test(u.pathname);
   const sameOrigin=(u.origin===self.location.origin);
-  const isApiRaw=(u.hostname==='api.github.com'&&/\/(setlist|notes|history)\.enc$/.test(u.pathname)&&(req.headers.get('Accept')||'').includes('raw'));
-  const isData=sameOrigin&&/\/(data\.enc|keys\.json|setlist\.enc|notes\.enc|history\.enc)$/.test(u.pathname);
+  const isApiRaw=(u.hostname==='api.github.com'&&/\/(setlist|notes|history|edits)\.enc$/.test(u.pathname)&&(req.headers.get('Accept')||'').includes('raw'));
+  const isData=sameOrigin&&/\/(data\.enc|keys\.json|setlist\.enc|notes\.enc|history\.enc|edits\.enc)$/.test(u.pathname);
   const isShell=sameOrigin&&(u.pathname.endsWith('/')||/\/(index\.html|manifest\.json|icon-\d+\.png)$/.test(u.pathname));
   const key=u.origin+u.pathname;
   if(isPage){
