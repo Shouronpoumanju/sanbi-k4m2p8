@@ -109,7 +109,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='202609192010';
+const BUILD='202609270300';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -273,7 +273,7 @@ function showUnlock(msg){
 }
 async function boot(){
   app.innerHTML='<div class="center"><div class="spin"></div><div>展開中…</div></div>';
-  SONGS=await decJSON('data.enc');BYID={};SONGS.forEach(s=>BYID[s.id]=s);try{PAGEINFO=await decJSON('pages.enc')||{}}catch(e){PAGEINFO={}}loadEditorInfo();
+  SONGS=await decJSON('data.enc');fixIdx(SONGS);BYID={};SONGS.forEach(s=>BYID[s.id]=s);try{PAGEINFO=await decJSON('pages.enc')||{}}catch(e){PAGEINFO={}}loadEditorInfo();
   PUB=await fetchPub();
   if(isStaff())NOTES=await fetchNotes();
   if(PUB&&PUB.l)setTimeout(()=>{try{PUB.l.forEach(id=>{const s0=BYID[id];if(s0)s0.pages.forEach(pp=>{fetch(pp).catch(()=>{})})})}catch(e){}},1500);
@@ -660,6 +660,15 @@ function drawSel(){const box=document.getElementById('selbox');if(!box)return;bo
   box.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{draft.l.splice(+b.dataset.r,1);save(LS_DRAFT,draft);drawSel();drawLib(document.getElementById('q').value)});
   box.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{const ids=draft.l.filter(id=>BYID[id]);openViewer(ids,+b.dataset.v)});}
 function mv(i,d){const j=i+d;if(j<0||j>=draft.l.length)return;[draft.l[i],draft.l[j]]=[draft.l[j],draft.l[i]];save(LS_DRAFT,draft);drawSel()}
+/* ws_idxfix_v1 目次の行を曲名・読みから毎回決め直す安全網 */
+function K2H(s){return (s||'').replace(/[\u30a1-\u30f6]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0x60)})}
+const IROWS=[['あ','あいうえおぁぃぅぇぉ'],['か','かきくけこがぎぐげご'],['さ','さしすせそざじずぜぞ'],['た','たちつてとだぢづでどっ'],['な','なにぬねの'],['は','はひふへほばびぶべぼぱぴぷぺぽ'],['ま','まみむめも'],['や','やゆよゃゅょ'],['ら','らりるれろ'],['わ','わをん']];
+function ROWOF(y){const c=K2H(y).charAt(0);for(const r of IROWS){if(r[1].indexOf(c)>=0)return r[0]}return /[A-Za-z]/.test(c)?c.toUpperCase():'#'}
+function fixIdx(list){for(const s of list){const t=(s.title||'').trim();
+  if(!/[\u3040-\u30ff\u4e00-\u9fff]/.test(t)){s.y=t.toLowerCase();const c=t.charAt(0).toUpperCase();s.g=(c>='A'&&c<='Z')?c:'#';}
+  else if(!s.y||/[\u4e00-\u9fff]/.test(s.y)){s.g='#';}
+  else {s.g=ROWOF(s.y);} }
+  list.sort(function(a,b){return GORD(a.g)-GORD(b.g)||(a.y<b.y?-1:a.y>b.y?1:0)});return list}
 function GORD(g){const j='あかさたなはまやらわ'.indexOf(g);if(j>=0)return j;if(g>='A'&&g<='Z')return 10+g.charCodeAt(0)-65;return 99}
 function grpList(){return [...new Set(SONGS.map(s=>s.g))].sort((a,b)=>GORD(a)-GORD(b))}
 function libItem(s,lyric){const viewOnly=(route==='lib');const on=draft.l.includes(s.id);const el=document.createElement('div');el.className='song'+(on?' sel':'');
