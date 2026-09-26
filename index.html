@@ -101,6 +101,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 .slide.zoom img{max-width:none;max-height:none;width:190%;object-fit:unset}
 .pageflag{position:absolute;top:calc(7px + env(safe-area-inset-top));right:9px;background:rgba(0,0,0,.5);color:#fff;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;pointer-events:none;z-index:3}
 .edge{position:absolute;top:0;bottom:0;width:15%;z-index:2}.edge.l{left:0}.edge.r{right:0}.stage.two{display:grid;grid-template-columns:1fr 1fr;align-content:start;column-gap:2px}.stage.two .slide.load{min-height:50vh}.turnbtn{position:absolute;left:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:6;height:34px;border-radius:17px;border:none;background:rgba(20,18,30,.42);color:#fff;font-size:12px;font-weight:700;padding:0 12px;cursor:pointer;transition:opacity .35s}.turnbtn.hid{opacity:0;pointer-events:none}.vgear{position:absolute;top:calc(8px + env(safe-area-inset-top));right:10px;z-index:6;width:34px;height:34px;border-radius:50%;border:none;background:rgba(20,18,30,.26);color:rgba(255,255,255,.92);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}.pageflag{top:calc(48px + env(safe-area-inset-top))}.vset label{display:flex;align-items:center;gap:10px;padding:12px 4px;font-size:15px;border-top:1px solid var(--line)}.vset label:first-of-type{border-top:none}.vset input{width:22px;height:22px}.vset .d{font-size:12px;color:var(--sub);margin-top:2px}.vedit{right:52px;font-size:15px}.slide.scan{display:none}.stage.showscan .slide.scan{display:block}.slide.off{display:none !important}.slide.on{display:block !important}.vset .pl{margin-top:8px;border-top:1px solid var(--line);padding-top:6px}.vset .pl label{padding:8px 4px;border-top:none}.vset .pl .h{font-size:13px;color:var(--sub);margin:4px 0}
+.slide .ovl{position:absolute;left:0;top:0;pointer-events:none;z-index:2}.slide.editing .ovl{pointer-events:auto;touch-action:none}.edtop.pv{top:auto;bottom:0;padding:9px 12px calc(9px + env(safe-area-inset-bottom))}.edtop{position:absolute;left:0;right:0;top:0;z-index:9;background:rgba(20,18,30,.93);color:#fff;font-size:12.5px;font-weight:700;padding:calc(7px + env(safe-area-inset-top)) 12px 7px;text-align:center;line-height:1.35}.edbar{position:absolute;left:0;right:0;bottom:0;z-index:9;background:rgba(20,18,30,.93);padding:8px 8px calc(8px + env(safe-area-inset-bottom));display:flex;gap:6px;flex-wrap:wrap;justify-content:center}.edbar button{border:none;border-radius:9px;padding:9px 11px;font-size:13px;font-weight:700;background:rgba(255,255,255,.16);color:#fff;cursor:pointer;font-family:inherit}.edbar button.on{background:var(--accent)}.edbar button.go{background:#2e9e5b}.edbar button:disabled{opacity:.5}.edmode .vclose,.edmode .vgear,.edmode .flagbtn,.edmode .turnbtn,.edmode .edge{display:none !important}.appr{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;background:var(--card)}.appr .t{font-weight:800;font-size:15px}.appr .d{font-size:12px;color:var(--sub);margin-top:3px}.appr .row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}.appr .row button{flex:1;min-width:120px;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:13.5px;font-weight:700;cursor:pointer;background:var(--bg);color:var(--ink);font-family:inherit}.appr .row button.ok{background:#2e9e5b;color:#fff;border-color:#2e9e5b}.appr .row button.ng{background:#c0392b;color:#fff;border-color:#c0392b}.badge{display:inline-block;font-size:11px;font-weight:800;border-radius:20px;padding:2px 8px;margin-left:6px;vertical-align:middle}.badge.w{background:#f6c445;color:#4a3a00}.badge.o{background:#2e9e5b;color:#fff}.badge.n{background:#c0392b;color:#fff}
 </style>
 </head>
 <body>
@@ -109,7 +110,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='202609270300';
+const BUILD='202609270930';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -275,6 +276,7 @@ async function boot(){
   app.innerHTML='<div class="center"><div class="spin"></div><div>展開中…</div></div>';
   SONGS=await decJSON('data.enc');fixIdx(SONGS);BYID={};SONGS.forEach(s=>BYID[s.id]=s);try{PAGEINFO=await decJSON('pages.enc')||{}}catch(e){PAGEINFO={}}loadEditorInfo();
   PUB=await fetchPub();
+  EDITS=await fetchEdits();
   if(isStaff())NOTES=await fetchNotes();
   if(PUB&&PUB.l)setTimeout(()=>{try{PUB.l.forEach(id=>{const s0=BYID[id];if(s0)s0.pages.forEach(pp=>{fetch(pp).catch(()=>{})})})}catch(e){}},1500);
   shared=parseHash();render();
@@ -377,7 +379,7 @@ async function saveNotes(list){
 function fmtDate(ms){const d=new Date(ms);return (d.getMonth()+1)+'/'+d.getDate()}
 function openCount(){return NOTES.filter(n=>!n.done).length}
 function currentList(){if(shared)return{t:shared.t,s:shared.s,ids:shared.l.filter(id=>BYID[id])};if(PUB)return{t:PUB.t,s:PUB.s,ids:PUB.l.filter(id=>BYID[id])};return null}
-function render(){if(route==='admin'&&canSelect())return renderAdmin();if(route==='lib'&&isStaff())return renderLib();if(route==='notes'&&isStaff())return renderNotes();renderHome()}
+function render(){if(route==='appr'&&isStaff())return renderAppr();if(route==='admin'&&canSelect())return renderAdmin();if(route==='lib'&&isStaff())return renderLib();if(route==='notes'&&isStaff())return renderNotes();renderHome()}
 
 function renderHome(){
   if(shared&&shared.expired){app.innerHTML='<div class="center"><div style="font-size:40px">\u23f3</div><div style="font-size:18px;font-weight:800;color:var(--ink)">\u3053\u306e\u5171\u6709\u30ea\u30f3\u30af\u306f\u671f\u9650\u5207\u308c\u3067\u3059</div><div>\u5171\u6709\u30ea\u30f3\u30af\u306f\u4f5c\u6210\u304b\u30891\u9031\u9593\u3067\u81ea\u52d5\u7684\u306b\u7121\u52b9\u306b\u306a\u308a\u307e\u3059\u3002<br>\u65b0\u3057\u3044\u30ea\u30f3\u30af\u3092\u9001\u3063\u3066\u3082\u3089\u3063\u3066\u304f\u3060\u3055\u3044\u3002</div></div>';return}
@@ -399,6 +401,7 @@ function renderHome(){
   if(!shared&&isStaff()){
     const lb=document.createElement('button');lb.className='btn ghost';lb.textContent='📚 楽譜ライブラリ（'+SONGS.length+'曲）';lb.onclick=()=>{route='lib';render()};m.appendChild(lb);
     const nb=document.createElement('button');nb.className='btn ghost';nb.textContent='🚩 気づきメモ'+(openCount()?'（'+openCount()+'件）':'');nb.onclick=()=>{route='notes';render()};m.appendChild(nb);
+    const ab=document.createElement('button');ab.className='btn ghost';ab.textContent='✎ 楽譜の修正'+editBadge();ab.onclick=()=>{route='appr';render()};m.appendChild(ab);
     const eb=document.createElement('button');eb.className='btn ghost';eb.textContent='\u{1F3BC} \u30b3\u30fc\u30c9\u3092\u7f6e\u304f';eb.onclick=openEditor;eb.oncontextmenu=(ev)=>{ev.preventDefault();editorSheet()};m.appendChild(eb);
   }
   if(!shared){
@@ -699,13 +702,309 @@ function drawLib(q){const box=document.getElementById('libbox'),bar=document.get
   if(bar){bar.style.display='flex';bar.innerHTML='';gs.forEach(g=>{const b=document.createElement('button');b.textContent=g;if(g===libGrp)b.className='on';b.onclick=()=>{libGrp=g;const q2=document.getElementById('q');if(q2)q2.value='';drawLib('')};bar.appendChild(b);});}
   for(const s of SONGS){if(s.g!==libGrp)continue;box.appendChild(libItem(s));}}
 
+
+/* ---------- 楽譜の重ね書き修正（司書が直す → 選曲担当が承認） ws_scoreedit_v1 ---------- */
+const EDITS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/edits.enc';
+let EDITS={},PREVIEW=null,ED=null;
+async function fetchEdits(){
+  let u=null;
+  try{const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),6000);
+    const r=await fetch(EDITS_API+'?ref=main&cb='+Date.now(),{headers:{'Accept':'application/vnd.github.raw'},cache:'no-store',signal:ac.signal});clearTimeout(tm);
+    if(r.ok)u=b64d((await r.text()).trim());}catch(e){}
+  if(!u){try{const r2=await fetch('edits.enc',{cache:'no-cache'});if(r2.ok)u=b64d((await r2.text()).trim());}catch(e){}}
+  if(!u||u.length<13)return {};
+  try{const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(0,12)},CKEY,u.slice(12));
+    const o=JSON.parse(new TextDecoder().decode(pt));return (o&&typeof o==='object'&&!Array.isArray(o))?o:{};}catch(e){return {}}
+}
+async function saveEdits(obj){
+  const pat=load(LS_PAT);
+  if(!pat)throw new Error('書き込み用の設定がありません');
+  const ek=await crypto.subtle.importKey('raw',b64d(load(LS_K)),{name:'AES-GCM'},false,['encrypt']);
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},ek,enc8(JSON.stringify(obj))));
+  const full=new Uint8Array(12+ct.length);full.set(iv);full.set(ct,12);
+  const H={'Authorization':'Bearer '+pat,'Accept':'application/vnd.github+json'};
+  let sha=null;
+  try{const r=await fetch(EDITS_API+'?ref=main&cb='+Date.now(),{headers:H,cache:'no-store'});if(r.ok)sha=(await r.json()).sha}catch(e){}
+  const res=await fetch(EDITS_API,{method:'PUT',headers:H,body:JSON.stringify(Object.assign({message:'edits update',content:btoa(b64e(full.buffer)),branch:'main'},sha?{sha:sha}:{}))});
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  EDITS=obj;
+}
+function canEditScore(){return isLib()||isAdmin()}
+function canApprove(){return isLead()||isAdmin()}
+function nOps(ops){let n=0;for(const k in (ops||{}))n+=(ops[k]||[]).length;return n}
+function waitList(){return Object.keys(EDITS).filter(k=>EDITS[k]&&EDITS[k].pd&&!EDITS[k].pd.rej)}
+function rejList(){return Object.keys(EDITS).filter(k=>EDITS[k]&&EDITS[k].pd&&EDITS[k].pd.rej)}
+function doneList(){return Object.keys(EDITS).filter(k=>EDITS[k]&&EDITS[k].ap&&nOps(EDITS[k].ap.ops))}
+function editBadge(){const w=waitList().length,r=rejList().length;const a=[];if(w)a.push('承認待ち'+w);if(r&&canEditScore())a.push('差し戻し'+r);return a.length?'（'+a.join('・')+'）':''}
+
+/* 重ね書きの描画 */
+function activeOps(sid){
+  if(ED&&ED.sid===sid)return ED.ops;
+  const r=EDITS[sid];if(!r)return null;
+  if(PREVIEW&&PREVIEW.sid===sid&&r.pd)return r.pd.ops;
+  return (r.ap&&r.ap.ops)||null}
+const SVGNS='http://www.w3.org/2000/svg';
+function opNode(o){
+  if(o.t==='e'){const r=document.createElementNS(SVGNS,'rect');
+    r.setAttribute('x',o.x);r.setAttribute('y',o.y);r.setAttribute('width',o.w);r.setAttribute('height',o.h);
+    r.setAttribute('fill','#ffffff');return r}
+  if(o.t==='t'){const t=document.createElementNS(SVGNS,'text');
+    t.setAttribute('x',o.x);t.setAttribute('y',o.y);t.setAttribute('font-size',o.fs);
+    t.setAttribute('font-weight',o.b?700:500);
+    t.setAttribute('font-family',o.b?"'Helvetica Neue',Helvetica,Arial,sans-serif":"'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP','Yu Gothic',sans-serif");
+    t.setAttribute('fill','#1a1a1a');
+    t.setAttributeNS('http://www.w3.org/XML/1998/namespace','xml:space','preserve');
+    t.textContent=o.s||'';return t}
+  return null}
+function tmpNode(t){const r=document.createElementNS(SVGNS,'rect');
+  r.setAttribute('x',t.x);r.setAttribute('y',t.y);r.setAttribute('width',t.w);r.setAttribute('height',t.h);
+  r.setAttribute('fill','#ffffff');r.setAttribute('stroke','#5b4b8a');r.setAttribute('stroke-width','2');r.setAttribute('stroke-dasharray','6 4');return r}
+function syncOvl(sl){const img=sl.querySelector('img'),ov=sl.querySelector('svg.ovl');if(!img||!ov)return;
+  ov.style.width=img.clientWidth+'px';ov.style.height=img.clientHeight+'px';ov.style.left=img.offsetLeft+'px';ov.style.top=img.offsetTop+'px'}
+function drawOverlays(){
+  const st=document.getElementById('stage');if(!st)return;const s=cur();if(!s)return;
+  const ops=activeOps(s.id)||{};
+  [...st.querySelectorAll('.slide')].forEach((sl,pi)=>{
+    const list=ops[pi]||[];
+    let ov=sl.querySelector('svg.ovl');
+    if(!list.length&&!ED){if(ov)ov.remove();return}
+    const img=sl.querySelector('img');if(!img)return;
+    const w=img.naturalWidth||1241,h=img.naturalHeight||1754;
+    if(!ov){ov=document.createElementNS('http://www.w3.org/2000/svg','svg');ov.setAttribute('class','ovl');sl.appendChild(ov);if(ED)bindEdit(ov,sl,pi)}
+    ov.setAttribute('viewBox','0 0 1000 '+Math.round(1000*h/w));
+    ov.setAttribute('preserveAspectRatio','none');
+    while(ov.firstChild)ov.removeChild(ov.firstChild);
+    list.forEach(function(o){const n=opNode(o);if(n)ov.appendChild(n)});
+    if(ED&&ED.tmp&&ED.tmp.pi===pi)ov.appendChild(tmpNode(ED.tmp));
+    syncOvl(sl);
+  });
+}
+
+/* ---------- 重ね書きエディタ ---------- */
+const FSZ=[16,21,28];
+function snap(){return JSON.parse(JSON.stringify(ED.ops))}
+function pushUndo(){ED.undo.push(snap());if(ED.undo.length>25)ED.undo.shift()}
+function editChooserSheet(){
+  const s=cur();if(!s)return;
+  const sh=document.getElementById('sheet');
+  sh.innerHTML='<div class="sheetbox"><h3>✎ この楽譜を直す</h3><div class="sub">'+esc(s.title)+'</div>'
+   +'<button class="btn" id="ed_in" style="margin-top:10px">この画面で直す<div style="font-size:11.5px;font-weight:400;opacity:.85;margin-top:2px">歌詞やコードを 消す／書く／動かす。完了すると選曲担当の確認に回ります</div></button>'
+   +'<button class="btn ghost" id="ed_mac" style="margin-top:8px">🎼 Macの清書ツールで直す</button>'
+   +'<button class="btn ghost" id="ed_x" style="margin-top:8px">やめる</button></div>';
+  sh.classList.add('on');
+  sh.onclick=e=>{if(e.target===sh)sh.classList.remove('on')};
+  document.getElementById('ed_x').onclick=()=>sh.classList.remove('on');
+  document.getElementById('ed_mac').onclick=()=>{sh.classList.remove('on');editorChooser(s.id)};
+  document.getElementById('ed_in').onclick=()=>{sh.classList.remove('on');startScoreEdit()};
+}
+function startScoreEdit(){
+  const s=cur();if(!s)return;
+  if(!canEditScore()){toast('この操作は司書と管理者だけです');return}
+  if(!load(LS_PAT)){toast('この端末では保存できません。合言葉を入れ直してみてください');return}
+  const r=EDITS[s.id]||{};
+  const base=JSON.parse(JSON.stringify((r.pd&&r.pd.ops)||(r.ap&&r.ap.ops)||{}));
+  ED={sid:s.id,ops:base,tool:'e',fs:1,undo:[],tmp:null};
+  PREVIEW=null;
+  V.classList.add('edmode');
+  const st=document.getElementById('stage');if(st)st.style.scrollSnapType='none';
+  [...document.querySelectorAll('#stage .slide')].forEach(sl=>sl.classList.add('editing'));
+  [...document.querySelectorAll('#stage svg.ovl')].forEach(function(o){o.remove()});
+  buildEditBars();drawOverlays();
+  toast('直したいところを操作してください');
+}
+function endScoreEdit(){
+  ED=null;V.classList.remove('edmode');
+  const t=document.getElementById('edtop'),b=document.getElementById('edbar');if(t)t.remove();if(b)b.remove();
+  [...document.querySelectorAll('#stage .slide')].forEach(sl=>sl.classList.remove('editing'));
+  const st=document.getElementById('stage');if(st)st.style.scrollSnapType='y mandatory';
+  [...document.querySelectorAll('#stage svg.ovl')].forEach(function(o){o.remove()});
+  drawOverlays();
+}
+function buildEditBars(){
+  const s=BYID[ED.sid];
+  let top=document.getElementById('edtop');
+  if(!top){top=document.createElement('div');top.id='edtop';top.className='edtop';V.appendChild(top)}
+  top.textContent='✎ '+s.title+'（直したら「完了」を押してください）';
+  let bar=document.getElementById('edbar');
+  if(!bar){bar=document.createElement('div');bar.id='edbar';bar.className='edbar';V.appendChild(bar)}
+  const T=[['e','消す'],['t','歌詞を書く'],['c','コードを書く'],['m','動かす']];
+  bar.innerHTML=T.map(function(t){return '<button data-t="'+t[0]+'"'+(ED.tool===t[0]?' class="on"':'')+'>'+t[1]+'</button>'}).join('')
+    +'<button data-z="1">文字の大きさ：'+['小','中','大'][ED.fs]+'</button>'
+    +'<button data-p="-1">◀ 前の頁</button><button data-p="1">次の頁 ▶</button>'
+    +'<button data-u="1">取り消す</button>'
+    +'<button class="go" data-ok="1">完了（確認をお願いする）</button>'
+    +'<button data-x="1">やめる</button>';
+  bar.querySelectorAll('button').forEach(function(b){b.onclick=function(e){
+    e.stopPropagation();const d=b.dataset;
+    if(d.t){ED.tool=d.t;buildEditBars();return}
+    if(d.z){ED.fs=(ED.fs+1)%3;buildEditBars();return}
+    if(d.p){edTurn(+d.p);return}
+    if(d.u){if(ED.undo.length){ED.ops=ED.undo.pop();drawOverlays();}else toast('これ以上は戻せません');return}
+    if(d.ok){finishScoreEdit();return}
+    if(d.x){if(ED.undo.length&&!b.dataset.arm){b.dataset.arm='1';b.textContent='もう一度タップでやめる';setTimeout(function(){if(b.dataset){delete b.dataset.arm;b.textContent='やめる'}},4000);return}endScoreEdit()}
+  }});
+}
+function edTurn(d){const st=document.getElementById('stage');if(!st)return;
+  const sl=[...st.querySelectorAll('.slide')].filter(x=>x.offsetParent!==null);if(!sl.length)return;
+  let p=curPage()-1+d;if(p<0)p=0;if(p>=sl.length)p=sl.length-1;st.scrollTop=sl[p].offsetTop}
+function uxy(ov,ev){const r=ov.getBoundingClientRect();const vb=ov.getAttribute('viewBox').split(' ');
+  return {x:Math.round((ev.clientX-r.left)/r.width*1000),y:Math.round((ev.clientY-r.top)/r.height*(+vb[3]))}}
+function bindEdit(ov,sl,pi){
+  let st=null;
+  ov.addEventListener('pointerdown',function(ev){
+    if(!ED)return;ev.preventDefault();ev.stopPropagation();
+    const p=uxy(ov,ev);
+    if(ED.tool==='e'){st={x:p.x,y:p.y};ED.tmp={pi:pi,x:p.x,y:p.y,w:0,h:0};ov.setPointerCapture(ev.pointerId);drawOverlays();return}
+    if(ED.tool==='m'){const i=hitOp(pi,p);if(i<0){toast('動かすものを長めに押してください');return}
+      pushUndo();st={i:i,p:p};ov.setPointerCapture(ev.pointerId);return}
+    openTextSheet(pi,p,ED.tool==='c');
+  });
+  ov.addEventListener('pointermove',function(ev){
+    if(!ED||!st)return;ev.preventDefault();
+    const p=uxy(ov,ev);
+    if(ED.tool==='e'){ED.tmp={pi:pi,x:Math.min(st.x,p.x),y:Math.min(st.y,p.y),w:Math.abs(p.x-st.x),h:Math.abs(p.y-st.y)};drawOverlays();return}
+    if(ED.tool==='m'){const o=ED.ops[pi][st.i];o.x+=p.x-st.p.x;o.y+=p.y-st.p.y;st.p=p;drawOverlays()}
+  });
+  const up=function(ev){
+    if(!ED||!st)return;
+    if(ED.tool==='e'){const t=ED.tmp;ED.tmp=null;
+      if(t&&t.w>4&&t.h>4){pushUndo();(ED.ops[pi]=ED.ops[pi]||[]).push({t:'e',x:t.x,y:t.y,w:t.w,h:t.h})}
+      drawOverlays()}
+    st=null};
+  ov.addEventListener('pointerup',up);ov.addEventListener('pointercancel',up);
+  ov.addEventListener('click',function(ev){ev.stopPropagation()});
+}
+function hitOp(pi,p){const l=ED.ops[pi]||[];
+  for(let i=l.length-1;i>=0;i--){const o=l[i];
+    if(o.t==='e'){if(p.x>=o.x-6&&p.x<=o.x+o.w+6&&p.y>=o.y-6&&p.y<=o.y+o.h+6)return i}
+    else{const w=(o.s||'').length*o.fs*0.62;if(p.x>=o.x-10&&p.x<=o.x+w+10&&p.y>=o.y-o.fs-6&&p.y<=o.y+8)return i}}
+  return -1}
+function openTextSheet(pi,p,bold){
+  const sh=document.getElementById('sheet');
+  sh.innerHTML='<div class="sheetbox"><h3>'+(bold?'コードを書く':'歌詞を書く')+'</h3>'
+   +'<div class="sub">押したところに入ります。あとで「動かす」でずらせます</div>'
+   +'<input class="search" id="etx" spellcheck="false" placeholder="'+(bold?'例：Am7':'例：主をほめよ')+'">'
+   +'<button class="btn" id="etok" style="margin-top:8px">置く</button>'
+   +'<button class="btn ghost" id="etng" style="margin-top:8px">やめる</button></div>';
+  sh.classList.add('on');
+  sh.onclick=e=>{if(e.target===sh)sh.classList.remove('on')};
+  const inp=document.getElementById('etx');setTimeout(()=>inp.focus(),80);
+  document.getElementById('etng').onclick=()=>sh.classList.remove('on');
+  const ok=function(){const v=inp.value.trim();if(!v){sh.classList.remove('on');return}
+    pushUndo();(ED.ops[pi]=ED.ops[pi]||[]).push({t:'t',x:p.x,y:p.y,fs:FSZ[ED.fs],b:bold?1:0,s:v});
+    sh.classList.remove('on');drawOverlays()};
+  document.getElementById('etok').onclick=ok;
+  inp.onkeydown=e=>{if(e.key==='Enter')ok()};
+}
+async function finishScoreEdit(){
+  const sid=ED.sid,s=BYID[sid];
+  for(const k in ED.ops)if(!ED.ops[k].length)delete ED.ops[k];
+  const rec=Object.assign({},EDITS[sid]||{});
+  rec.pd={ops:ED.ops,by:ROLENAME[role()]||'メンバー',at:Date.now(),title:s.title};
+  const next=Object.assign({},EDITS);next[sid]=rec;
+  const btnbar=document.getElementById('edbar');if(btnbar)btnbar.querySelectorAll('button').forEach(b=>b.disabled=true);
+  try{await saveEdits(next);endScoreEdit();toast('確認をお願いしました。承認されると全員に反映されます')}
+  catch(e){if(btnbar)btnbar.querySelectorAll('button').forEach(b=>b.disabled=false);toast('保存に失敗しました：'+emsg(e))}
+}
+
+/* ---------- 承認の画面 ---------- */
+function renderAppr(){
+  app.innerHTML='';
+  const h=document.createElement('header');h.className='top';
+  h.innerHTML='<div style="min-width:0"><div class="brand">SCORE EDITS</div><div class="h1">楽譜の修正</div>'
+    +'<div class="date">承認待ち '+waitList().length+' 件 / 反映済み '+doneList().length+' 曲</div></div>'
+    +'<button class="iconbtn" id="back">‹ 戻る</button>';
+  app.appendChild(h);
+  const m=document.createElement('main');m.id='apprmain';app.appendChild(m);
+  drawAppr();
+  document.getElementById('back').onclick=()=>{route='home';render()};
+}
+function apprCard(sid,kind){
+  const r=EDITS[sid],s=BYID[sid];if(!r||!s)return null;
+  const el=document.createElement('div');el.className='appr';
+  const d=(kind==='ap')?r.ap:r.pd;
+  const bd=kind==='wait'?'<span class="badge w">承認待ち</span>':kind==='rej'?'<span class="badge n">差し戻し</span>':'<span class="badge o">反映済み</span>';
+  el.innerHTML='<div class="t">'+esc(s.title)+bd+'</div>'
+    +'<div class="d">'+esc(d.by||'')+'／'+fmtDate(d.at)+'・直したところ '+nOps(d.ops)+' か所</div>'
+    +(kind==='rej'&&r.pd.rej?'<div class="d" style="color:#c0392b;margin-top:4px">差し戻し：'+esc(r.pd.rej.c||'')+'（'+esc(r.pd.rej.by||'')+'）</div>':'')
+    +'<div class="row" id="rw"></div>';
+  const row=el.querySelector('#rw');
+  const mk=(txt,cls,fn)=>{const b=document.createElement('button');b.textContent=txt;if(cls)b.className=cls;b.onclick=fn;row.appendChild(b);return b};
+  if(kind==='ap'){
+    mk('直したあとを見る','',()=>{PREVIEW=null;openViewer([sid],0)});
+    if(canApprove()&&(r.hist&&r.hist.length||r.ap))mk('元に戻す','ng',()=>revertAppr(sid));
+  }else{
+    mk('確認する（直したあと）','',()=>{PREVIEW={sid:sid};openViewer([sid],0)});
+    if(canApprove())mk('承認して反映','ok',()=>approve(sid));
+    if(canApprove())mk('差し戻す','ng',()=>reject(sid));
+    if(canEditScore())mk('取り下げる','',()=>withdraw(sid));
+  }
+  return el;
+}
+function drawAppr(){
+  const m=document.getElementById('apprmain');if(!m)return;m.innerHTML='';
+  const w=waitList(),rj=rejList(),dn=doneList();
+  if(!w.length&&!rj.length&&!dn.length){m.innerHTML='<div class="center" style="min-height:40vh">まだ修正はありません。<br>楽譜を開いて右上の ✎ から直せます。</div>';return}
+  const sec=(t,arr,kind)=>{if(!arr.length)return;const hd=document.createElement('div');hd.className='hint';hd.textContent=t;m.appendChild(hd);
+    arr.forEach(sid=>{const c=apprCard(sid,kind);if(c)m.appendChild(c)})};
+  sec('確認をお願いしています',w,'wait');
+  sec('差し戻されています（直して出し直してください）',rj,'rej');
+  sec('反映済み',dn,'ap');
+}
+async function approve(sid){
+  if(!canApprove()){toast('承認は選曲担当と管理者だけです');return}
+  const r=Object.assign({},EDITS[sid]);if(!r.pd)return;
+  const hist=(r.hist||[]).slice(-4);if(r.ap)hist.push(r.ap);
+  const next=Object.assign({},EDITS);
+  next[sid]={ap:{ops:r.pd.ops,by:ROLENAME[role()]||'',at:Date.now(),from:r.pd.by},hist:hist};
+  if(!nOps(r.pd.ops)&&!hist.length)delete next[sid];
+  try{await saveEdits(next);toast('承認しました。全員に反映されます');drawAppr();render()}
+  catch(e){toast('保存に失敗しました：'+emsg(e))}
+}
+function reject(sid){
+  const s=BYID[sid];const sh=document.getElementById('sheet');
+  sh.innerHTML='<div class="sheetbox"><h3>差し戻す</h3><div class="sub">'+esc(s?s.title:'')+'</div>'
+   +'<textarea id="rjt" placeholder="例：2段目のコードはAmではなくAm7です"></textarea>'
+   +'<button class="btn" id="rjok" style="margin-top:8px">差し戻す</button>'
+   +'<button class="btn ghost" id="rjng" style="margin-top:8px">やめる</button></div>';
+  sh.classList.add('on');
+  sh.onclick=e=>{if(e.target===sh)sh.classList.remove('on')};
+  document.getElementById('rjng').onclick=()=>sh.classList.remove('on');
+  document.getElementById('rjok').onclick=async function(){
+    const c=document.getElementById('rjt').value.trim();
+    if(!c){toast('ひとこと書いてください');return}
+    const r=Object.assign({},EDITS[sid]);if(!r.pd)return;
+    r.pd=Object.assign({},r.pd,{rej:{by:ROLENAME[role()]||'',at:Date.now(),c:c}});
+    const next=Object.assign({},EDITS);next[sid]=r;
+    this.disabled=true;
+    try{await saveEdits(next);sh.classList.remove('on');toast('差し戻しました');drawAppr()}
+    catch(e){this.disabled=false;toast('保存に失敗しました：'+emsg(e))}
+  };
+}
+async function withdraw(sid){
+  const r=Object.assign({},EDITS[sid]);delete r.pd;
+  const next=Object.assign({},EDITS);
+  if(!r.ap&&!(r.hist&&r.hist.length))delete next[sid];else next[sid]=r;
+  try{await saveEdits(next);toast('取り下げました');drawAppr()}catch(e){toast('保存に失敗しました：'+emsg(e))}
+}
+async function revertAppr(sid){
+  if(!canApprove()){toast('元に戻せるのは選曲担当と管理者だけです');return}
+  const r=Object.assign({},EDITS[sid]);const hist=(r.hist||[]).slice();
+  const prev=hist.pop();
+  const next=Object.assign({},EDITS);
+  if(prev){next[sid]={ap:prev,hist:hist}}else{if(r.pd){next[sid]={pd:r.pd}}else delete next[sid]}
+  try{await saveEdits(next);toast(prev?'ひとつ前の状態に戻しました':'修正前の楽譜に戻しました');drawAppr();render()}
+  catch(e){toast('保存に失敗しました：'+emsg(e))}
+}
+
 /* ---------- viewer ---------- */
 const V=document.getElementById('viewer');
 let vIds=[],vSong=0;
 function cur(){return BYID[vIds[vSong]]}
 function openViewer(ids,idx,page){vIds=ids;vSong=idx;buildViewer();V.classList.add('on');wl(true);preload(idx+1);
   if(page&&page>1){setTimeout(()=>{const st=document.getElementById('stage');const sl=st?st.querySelectorAll('.slide'):[];if(sl[page-1])st.scrollTop=sl[page-1].offsetTop},250)}}
-function closeViewer(){V.classList.remove('on');wl(false)}
+function closeViewer(){if(ED){toast('先に「完了」か「やめる」を押してください');return}PREVIEW=null;V.classList.remove('on');wl(false);if(route==='appr'){try{drawAppr()}catch(e){}}}
 async function preload(i){const s=BYID[vIds[i]];if(!s)return;for(const p of s.pages){try{await decImg(p)}catch(e){}}}
 function buildViewer(){
   const s=cur();
@@ -713,6 +1012,7 @@ function buildViewer(){
   V.innerHTML=`<div class="stage" id="stage">${slides}<div class="edge l" id="el"></div><div class="edge r" id="er"></div></div>
    <button class="vclose" id="vx" aria-label="閉じる">✕</button><button class="vgear" id="vgear" aria-label="表示の設定">⚙</button>${isStaff()?'<button class="vgear vedit" id="vedit" aria-label="この楽譜を直す">✎</button>':''}${s.pages.length>1?'<button class="turnbtn hid" id="vtwo">\u898b\u958b\u304d</button>':''}${(nt&&s.pages.length>nt)?'<button class="turnbtn hid" id="vscan" style="left:auto;right:66px">\u4e94\u7dda\u8b5c</button>':''}${isStaff()?'<button class="flagbtn" id="vflag" aria-label="メモ">🚩</button>':''}`;
   const stage=document.getElementById('stage');stage.scrollTop=0;
+  (function(){var msg=null;   if(PREVIEW&&PREVIEW.sid===s.id)msg='確認中：直したあとの表示です（まだ全員には出ていません）';   else if(isStaff()&&EDITS[s.id]&&EDITS[s.id].pd)msg=EDITS[s.id].pd.rej?'差し戻された修正があります（「楽譜の修正」で確かめてください）':'承認待ちの修正があります（まだ反映されていません）';   if(msg){var pb=document.createElement('div');pb.className='edtop pv';pb.textContent=msg;V.appendChild(pb)}})();
   hydrate();
   const vx=document.getElementById('vx');
   vx.onclick=e=>{e.stopPropagation();closeViewer()};
@@ -721,18 +1021,18 @@ function buildViewer(){
   poke();
   stage.addEventListener('click',poke);
   if(vf)vf.onclick=e=>{e.stopPropagation();openNoteSheet()};
-  document.getElementById('el').onclick=()=>go(vSong-1);
-  document.getElementById('er').onclick=()=>go(vSong+1);
+  document.getElementById('el').onclick=()=>{if(ED)return;go(vSong-1)};
+  document.getElementById('er').onclick=()=>{if(ED)return;go(vSong+1)};
   /* ページ送り：下側タップ＝次、上側タップ＝前。両端は曲の切り替えのまま */
   const two=document.getElementById('vtwo');
-  const applyTwo=()=>{const on=!!load(LS_TWO)&&window.innerWidth>window.innerHeight&&s.pages.length>1;stage.classList.toggle('two',on);if(two)two.textContent=on?'1ページずつ':'見開き'};
+  const applyTwo=()=>{const on=!!load(LS_TWO)&&window.innerWidth>window.innerHeight&&s.pages.length>1;stage.classList.toggle('two',on);if(two)two.textContent=on?'1ページずつ':'見開き';setTimeout(function(){try{drawOverlays()}catch(e){}},0)};
   if(two){two.onclick=e=>{e.stopPropagation();save(LS_TWO,!load(LS_TWO));applyTwo();poke()};}
   applyTwo();window.__ws_two=applyTwo;
   const vg=document.getElementById('vgear');
   if(vg){vg.onclick=e=>{e.stopPropagation();openViewSettings()};}
   const ve=document.getElementById('vedit');
   if(ve){ve.onclick=e=>{e.stopPropagation();const s=cur();if(!s)return;
-    editorChooser(s.id)};}
+    if(canEditScore())editChooserSheet();else editorChooser(s.id)};}
 
 
   const sb=document.getElementById('vscan');
@@ -743,7 +1043,7 @@ function buildViewer(){
   applyScan();
   let tapT=null,lastTap=0;
   stage.addEventListener('click',e=>{
-    if(e.target.closest('.edge')||e.target.closest('button'))return;
+    if(ED)return;if(e.target.closest('.edge')||e.target.closest('button'))return;
     if(stage.querySelector('.slide.zoom')||s.pages.length<2)return;
     const n=Date.now(),dbl=(n-lastTap)<300;lastTap=n;clearTimeout(tapT);if(dbl)return;
     const y=(e.clientY-stage.getBoundingClientRect().top)/stage.clientHeight;
@@ -751,11 +1051,11 @@ function buildViewer(){
   });
 
   // double-tap zoom
-  stage.querySelectorAll('img').forEach(img=>img.addEventListener('click',()=>{const n=Date.now();if(n-(img._lt||0)<300)zoom(img);img._lt=n}));
+  stage.querySelectorAll('img').forEach(img=>img.addEventListener('click',()=>{if(ED)return;const n=Date.now();if(n-(img._lt||0)<300)zoom(img);img._lt=n}));
   // swipe song
   let sx=0,sy=0;
   stage.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
-  stage.addEventListener('touchend',e=>{if(stage.querySelector('.slide.zoom'))return;const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.6)go(vSong+(dx<0?1:-1))},{passive:true});
+  stage.addEventListener('touchend',e=>{if(ED)return;if(stage.querySelector('.slide.zoom'))return;const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.6)go(vSong+(dx<0?1:-1))},{passive:true});
 }
 function curPage(){const st=document.getElementById('stage');if(!st)return 1;const sl=[...st.querySelectorAll('.slide')].filter(x=>x.offsetParent!==null);let best=1,bd=1e9;sl.forEach((s,i)=>{const d=Math.abs(s.offsetTop-st.scrollTop);if(d<bd){bd=d;best=i+1}});return best}
 let noteCat=CATS[0];
@@ -787,9 +1087,9 @@ function openNoteSheet(){
     catch(e){NOTES=bak;btn.disabled=false;btn.textContent='メモを保存';toast('保存に失敗しました：'+emsg(e))}
   };
 }
-async function hydrate(){const imgs=[...document.querySelectorAll('#stage img[data-enc]')];for(const im of imgs){const p=im.getAttribute('data-enc');try{im.src=await decImg(p);im.parentElement.classList.remove('load')}catch(e){}im.removeAttribute('data-enc')}}
+async function hydrate(){const imgs=[...document.querySelectorAll('#stage img[data-enc]')];for(const im of imgs){const p=im.getAttribute('data-enc');im.onload=function(){try{drawOverlays()}catch(e){}};try{im.src=await decImg(p);im.parentElement.classList.remove('load')}catch(e){}im.removeAttribute('data-enc')}try{drawOverlays()}catch(e){}}
 function go(i){if(i<0||i>=vIds.length)return;vSong=i;buildViewer();preload(i+1)}
-function zoom(img){const sl=img.parentElement,st=document.getElementById('stage');if(sl.classList.toggle('zoom')){st.style.scrollSnapType='none'}else{st.style.scrollSnapType='y mandatory';sl.scrollTop=0;sl.scrollLeft=0}}
+function zoom(img){const sl=img.parentElement,st=document.getElementById('stage');if(sl.classList.toggle('zoom')){st.style.scrollSnapType='none'}else{st.style.scrollSnapType='y mandatory';sl.scrollTop=0;sl.scrollLeft=0}setTimeout(function(){try{syncOvl(sl)}catch(e){}},0)}
 
 const LS_TWO='ws_two_v1';
 function turnPage(d){const st=document.getElementById('stage');if(!st)return;const sl=[...st.querySelectorAll('.slide')].filter(x=>x.offsetParent!==null);if(!sl.length)return;
@@ -806,7 +1106,7 @@ document.addEventListener('keydown',e=>{
   else if(k==='ArrowLeft'||k==='ArrowUp'||k==='PageUp'||k==='Backspace'){e.preventDefault();turnPage(-1)}
   else if(k==='Escape'){closeViewer()}
 });
-window.addEventListener('resize',()=>{if(window.__ws_two)window.__ws_two()});
+window.addEventListener('resize',()=>{if(window.__ws_two)window.__ws_two();try{drawOverlays()}catch(e){}});
 
 
 const LS_PSEL='ws_psel_v1';
