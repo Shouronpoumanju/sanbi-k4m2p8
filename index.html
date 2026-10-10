@@ -110,7 +110,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='202609270930';
+const BUILD='202610110130';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -317,10 +317,10 @@ async function publish(){
     PUB={t:draft.t,s:draft.s,l:draft.l.slice(),d:Date.now()};
     try{const h=HIST||await fetchHist();
       const last=h[h.length-1];
-      if(!(last&&JSON.stringify(last.l)===JSON.stringify(draft.l)&&Date.now()-last.d<43200000)){
+      if(!(last&&(last.s===draft.s||(JSON.stringify(last.l)===JSON.stringify(draft.l)&&Date.now()-last.d<43200000)))){
         h.push({t:draft.t,s:draft.s,l:draft.l.slice(),d:Date.now()});
         while(h.length>120)h.shift();
-      }else{last.d=Date.now();last.t=draft.t;last.s=draft.s;}
+      }else{last.d=Date.now();last.t=draft.t;last.s=draft.s;last.l=draft.l.slice();}
       await saveHist(h);
     }catch(e){}
     toast('配信しました！全員に反映されます');
@@ -402,6 +402,7 @@ function renderHome(){
     const lb=document.createElement('button');lb.className='btn ghost';lb.textContent='📚 楽譜ライブラリ（'+SONGS.length+'曲）';lb.onclick=()=>{route='lib';render()};m.appendChild(lb);
     const nb=document.createElement('button');nb.className='btn ghost';nb.textContent='🚩 気づきメモ'+(openCount()?'（'+openCount()+'件）':'');nb.onclick=()=>{route='notes';render()};m.appendChild(nb);
     const ab=document.createElement('button');ab.className='btn ghost';ab.textContent='✎ 楽譜の修正'+editBadge();ab.onclick=()=>{route='appr';render()};m.appendChild(ab);
+    if(canEditScore()&&!load('ws_edhint_v1')){const hb=document.createElement('div');hb.className='hint';hb.style.cssText='border:1px dashed var(--accent);border-radius:12px;padding:10px;margin:6px 0';hb.innerHTML='<b>楽譜の上に直接書いて直せます。</b>楽譜を開いて右上の ✎ → 間違いを指でなぞって正しい文字を入れる → 完了。承認されると全員に反映されます。 <button class="btn ghost" style="margin-top:6px" id="edhide">わかった</button>';m.appendChild(hb);setTimeout(()=>{const x=document.getElementById('edhide');if(x)x.onclick=()=>{save('ws_edhint_v1',1);hb.remove()}},0)}
     const eb=document.createElement('button');eb.className='btn ghost';eb.textContent='\u{1F3BC} \u30b3\u30fc\u30c9\u3092\u7f6e\u304f';eb.onclick=openEditor;eb.oncontextmenu=(ev)=>{ev.preventDefault();editorSheet()};m.appendChild(eb);
   }
   if(!shared){
@@ -464,10 +465,11 @@ function drawNotes(){
     el.innerHTML=`<div class="nh"><span class="tag">${esc(n.cat)}</span><span>${esc(n.by||'')}</span><span>${fmtDate(n.at)}</span>${n.done?'<span>✓ 解決済み</span>':''}</div>
       <div class="nt">${esc(n.title)}${n.page?'（'+n.page+'ページ目）':''}</div>
       <div class="nb">${esc(n.text)}</div>
-      <div class="na">${s?'<button data-open="'+n.id+'">楽譜を開く</button>':''}<button data-tg="${n.id}">${n.done?'未対応に戻す':'解決済みにする'}</button><button data-del="${n.id}">削除</button></div>`;
+      <div class="na">${s?'<button data-open="'+n.id+'">楽譜を開く</button>':''}${(s&&!n.done&&canEditScore())?'<button data-fix="'+n.id+'" style="font-weight:800">✎ この指摘を直す</button>':''}<button data-tg="${n.id}">${n.done?'未対応に戻す':'解決済みにする'}</button><button data-del="${n.id}">削除</button></div>`;
     m.appendChild(el);
   });
   m.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>{const n=NOTES.find(x=>x.id===b.dataset.open);if(n&&BYID[n.sid])openViewer([n.sid],0,n.page)});
+  m.querySelectorAll('[data-fix]').forEach(b=>b.onclick=()=>{const n=NOTES.find(x=>x.id===b.dataset.fix);if(!n||!BYID[n.sid])return;const nt=PAGEINFO[n.sid]||0;const pg=(nt&&n.page>nt)?1:(n.page||1);openViewer([n.sid],0,pg);setTimeout(()=>{if(!ED)startScoreEdit()},400)});
   m.querySelectorAll('[data-tg]').forEach(b=>b.onclick=async()=>{
     const n=NOTES.find(x=>x.id===b.dataset.tg);if(!n)return;
     b.disabled=true;const prev=n.done;n.done=!n.done;
@@ -482,6 +484,8 @@ function drawNotes(){
   });
 }
 function renderAdmin(){
+  /* 日付ラベルが過ぎた日曜のままなら次の日曜に進める（使い回し防止） */
+  (function(){const m=/^(\d{1,2})月(\d{1,2})日/.exec(draft.s||'');if(!m)return;const now=new Date();let d=new Date(now.getFullYear(),+m[1]-1,+m[2]);if(d-now>200*86400000)d.setFullYear(d.getFullYear()-1);if(now-d>1.5*86400000){draft.s=nextSunday()+' 礼拝';save(LS_DRAFT,draft);setTimeout(()=>toast('配信の日付を「'+draft.s+'」に進めました'),300);}})();
   app.innerHTML='';
   const h=document.createElement('header');h.className='top';
   h.innerHTML=`<div style="min-width:0"><div class="brand">MANAGE</div>
@@ -751,9 +755,9 @@ function opNode(o){
     r.setAttribute('fill','#ffffff');return r}
   if(o.t==='t'){const t=document.createElementNS(SVGNS,'text');
     t.setAttribute('x',o.x);t.setAttribute('y',o.y);t.setAttribute('font-size',o.fs);
-    t.setAttribute('font-weight',o.b?700:500);
+    t.setAttribute('font-weight',o.b?700:400);
     t.setAttribute('font-family',o.b?"'Helvetica Neue',Helvetica,Arial,sans-serif":"'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP','Yu Gothic',sans-serif");
-    t.setAttribute('fill','#1a1a1a');
+    t.setAttribute('fill',o.c||'#1a1a1a');
     t.setAttributeNS('http://www.w3.org/XML/1998/namespace','xml:space','preserve');
     t.textContent=o.s||'';return t}
   return null}
@@ -782,7 +786,7 @@ function drawOverlays(){
 }
 
 /* ---------- 重ね書きエディタ ---------- */
-const FSZ=[16,21,28];
+const FSZ=[26,34,44],CSZ=[17,25,30],CHORDC='#c63b2b'; /* ws_notefix_v1 */
 function snap(){return JSON.parse(JSON.stringify(ED.ops))}
 function pushUndo(){ED.undo.push(snap());if(ED.undo.length>25)ED.undo.shift()}
 function editChooserSheet(){
@@ -804,7 +808,7 @@ function startScoreEdit(){
   if(!load(LS_PAT)){toast('この端末では保存できません。合言葉を入れ直してみてください');return}
   const r=EDITS[s.id]||{};
   const base=JSON.parse(JSON.stringify((r.pd&&r.pd.ops)||(r.ap&&r.ap.ops)||{}));
-  ED={sid:s.id,ops:base,tool:'e',fs:1,undo:[],tmp:null};
+  ED={sid:s.id,ops:base,tool:'r',fs:1,undo:[],tmp:null};
   PREVIEW=null;
   V.classList.add('edmode');
   const st=document.getElementById('stage');if(st)st.style.scrollSnapType='none';
@@ -825,10 +829,11 @@ function buildEditBars(){
   const s=BYID[ED.sid];
   let top=document.getElementById('edtop');
   if(!top){top=document.createElement('div');top.id='edtop';top.className='edtop';V.appendChild(top)}
-  top.textContent='✎ '+s.title+'（直したら「完了」を押してください）';
+  const TIP={r:'置き換え：間違いを指でなぞる → 正しい文字を入れる',e:'消す：消したい範囲を指でなぞる',t:'歌詞を書く：置きたい場所を押す',c:'コードを書く：置きたい場所を押す',m:'動かす：置いたものを指でずらす'};
+  top.textContent='✎ '+s.title+'　'+(TIP[ED.tool]||'');
   let bar=document.getElementById('edbar');
   if(!bar){bar=document.createElement('div');bar.id='edbar';bar.className='edbar';V.appendChild(bar)}
-  const T=[['e','消す'],['t','歌詞を書く'],['c','コードを書く'],['m','動かす']];
+  const T=[['r','置き換え'],['e','消す'],['t','歌詞を書く'],['c','コードを書く'],['m','動かす']];
   bar.innerHTML=T.map(function(t){return '<button data-t="'+t[0]+'"'+(ED.tool===t[0]?' class="on"':'')+'>'+t[1]+'</button>'}).join('')
     +'<button data-z="1">文字の大きさ：'+['小','中','大'][ED.fs]+'</button>'
     +'<button data-p="-1">◀ 前の頁</button><button data-p="1">次の頁 ▶</button>'
@@ -855,7 +860,7 @@ function bindEdit(ov,sl,pi){
   ov.addEventListener('pointerdown',function(ev){
     if(!ED)return;ev.preventDefault();ev.stopPropagation();
     const p=uxy(ov,ev);
-    if(ED.tool==='e'){st={x:p.x,y:p.y};ED.tmp={pi:pi,x:p.x,y:p.y,w:0,h:0};ov.setPointerCapture(ev.pointerId);drawOverlays();return}
+    if(ED.tool==='e'||ED.tool==='r'){st={x:p.x,y:p.y};ED.tmp={pi:pi,x:p.x,y:p.y,w:0,h:0};ov.setPointerCapture(ev.pointerId);drawOverlays();return}
     if(ED.tool==='m'){const i=hitOp(pi,p);if(i<0){toast('動かすものを長めに押してください');return}
       pushUndo();st={i:i,p:p};ov.setPointerCapture(ev.pointerId);return}
     openTextSheet(pi,p,ED.tool==='c');
@@ -863,13 +868,15 @@ function bindEdit(ov,sl,pi){
   ov.addEventListener('pointermove',function(ev){
     if(!ED||!st)return;ev.preventDefault();
     const p=uxy(ov,ev);
-    if(ED.tool==='e'){ED.tmp={pi:pi,x:Math.min(st.x,p.x),y:Math.min(st.y,p.y),w:Math.abs(p.x-st.x),h:Math.abs(p.y-st.y)};drawOverlays();return}
+    if(ED.tool==='e'||ED.tool==='r'){ED.tmp={pi:pi,x:Math.min(st.x,p.x),y:Math.min(st.y,p.y),w:Math.abs(p.x-st.x),h:Math.abs(p.y-st.y)};drawOverlays();return}
     if(ED.tool==='m'){const o=ED.ops[pi][st.i];o.x+=p.x-st.p.x;o.y+=p.y-st.p.y;st.p=p;drawOverlays()}
   });
   const up=function(ev){
     if(!ED||!st)return;
-    if(ED.tool==='e'){const t=ED.tmp;ED.tmp=null;
-      if(t&&t.w>4&&t.h>4){pushUndo();(ED.ops[pi]=ED.ops[pi]||[]).push({t:'e',x:t.x,y:t.y,w:t.w,h:t.h})}
+    if(ED.tool==='e'||ED.tool==='r'){const t=ED.tmp;ED.tmp=null;
+      if(t&&t.w>4&&t.h>4){
+        if(ED.tool==='r'){drawOverlays();st=null;openTextSheet(pi,{x:t.x+2,y:t.y+t.h-5},null,{t:'e',x:t.x,y:t.y,w:t.w,h:t.h});return}
+        pushUndo();(ED.ops[pi]=ED.ops[pi]||[]).push({t:'e',x:t.x,y:t.y,w:t.w,h:t.h})}
       drawOverlays()}
     st=null};
   ov.addEventListener('pointerup',up);ov.addEventListener('pointercancel',up);
@@ -880,22 +887,25 @@ function hitOp(pi,p){const l=ED.ops[pi]||[];
     if(o.t==='e'){if(p.x>=o.x-6&&p.x<=o.x+o.w+6&&p.y>=o.y-6&&p.y<=o.y+o.h+6)return i}
     else{const w=(o.s||'').length*o.fs*0.62;if(p.x>=o.x-10&&p.x<=o.x+w+10&&p.y>=o.y-o.fs-6&&p.y<=o.y+8)return i}}
   return -1}
-function openTextSheet(pi,p,bold){
+function openTextSheet(pi,p,bold,pre){
   const sh=document.getElementById('sheet');
-  sh.innerHTML='<div class="sheetbox"><h3>'+(bold?'コードを書く':'歌詞を書く')+'</h3>'
-   +'<div class="sub">押したところに入ります。あとで「動かす」でずらせます</div>'
-   +'<input class="search" id="etx" spellcheck="false" placeholder="'+(bold?'例：Am7':'例：主をほめよ')+'">'
-   +'<button class="btn" id="etok" style="margin-top:8px">置く</button>'
+  const title=pre?'置き換える':(bold?'コードを書く':'歌詞を書く');
+  sh.innerHTML='<div class="sheetbox"><h3>'+title+'</h3>'
+   +'<div class="sub">'+(pre?'なぞった範囲を白く消して、代わりの文字を入れます':'押したところに入ります。あとで「動かす」でずらせます')+'</div>'
+   +'<input class="search" id="etx" spellcheck="false" autocapitalize="none" placeholder="'+(bold?'例：Am7':'例：主をほめよ　または Am7')+'">'
+   +(pre?'<button class="btn" id="etc" style="margin-top:8px">コードとして置く（赤）</button><button class="btn ghost" id="etl" style="margin-top:8px">歌詞として置く（黒）</button>'
+        :'<button class="btn" id="etok" style="margin-top:8px">置く</button>')
    +'<button class="btn ghost" id="etng" style="margin-top:8px">やめる</button></div>';
   sh.classList.add('on');
   sh.onclick=e=>{if(e.target===sh)sh.classList.remove('on')};
   const inp=document.getElementById('etx');setTimeout(()=>inp.focus(),80);
   document.getElementById('etng').onclick=()=>sh.classList.remove('on');
-  const ok=function(){const v=inp.value.trim();if(!v){sh.classList.remove('on');return}
-    pushUndo();(ED.ops[pi]=ED.ops[pi]||[]).push({t:'t',x:p.x,y:p.y,fs:FSZ[ED.fs],b:bold?1:0,s:v});
-    sh.classList.remove('on');drawOverlays()};
-  document.getElementById('etok').onclick=ok;
-  inp.onkeydown=e=>{if(e.key==='Enter')ok()};
+  const put=function(isChord){const v=inp.value.trim();if(!v){sh.classList.remove('on');return}
+    pushUndo();const L=(ED.ops[pi]=ED.ops[pi]||[]);if(pre)L.push(pre);
+    const o={t:'t',x:p.x,y:p.y,fs:isChord?CSZ[ED.fs]:FSZ[ED.fs],b:0,s:v};if(isChord)o.c=CHORDC;
+    L.push(o);sh.classList.remove('on');drawOverlays()};
+  if(pre){document.getElementById('etc').onclick=()=>put(true);document.getElementById('etl').onclick=()=>put(false);inp.onkeydown=e=>{if(e.key==='Enter')put(true)};}
+  else{document.getElementById('etok').onclick=()=>put(!!bold);inp.onkeydown=e=>{if(e.key==='Enter')put(!!bold)};}
 }
 async function finishScoreEdit(){
   const sid=ED.sid,s=BYID[sid];
@@ -927,7 +937,9 @@ function apprCard(sid,kind){
   const bd=kind==='wait'?'<span class="badge w">承認待ち</span>':kind==='rej'?'<span class="badge n">差し戻し</span>':'<span class="badge o">反映済み</span>';
   el.innerHTML='<div class="t">'+esc(s.title)+bd+'</div>'
     +'<div class="d">'+esc(d.by||'')+'／'+fmtDate(d.at)+'・直したところ '+nOps(d.ops)+' か所</div>'
+    +(d.memo?'<div class="d" style="white-space:pre-wrap;margin-top:4px">'+esc(d.memo)+'</div>':'')
     +(kind==='rej'&&r.pd.rej?'<div class="d" style="color:#c0392b;margin-top:4px">差し戻し：'+esc(r.pd.rej.c||'')+'（'+esc(r.pd.rej.by||'')+'）</div>':'')
+    +(function(){const rel=(NOTES||[]).filter(n=>n.sid===sid&&!n.done);return rel.length?'<div class="d" style="margin-top:4px">🚩 関連する気づきメモ '+rel.length+'件（未対応）</div>':''})()
     +'<div class="row" id="rw"></div>';
   const row=el.querySelector('#rw');
   const mk=(txt,cls,fn)=>{const b=document.createElement('button');b.textContent=txt;if(cls)b.className=cls;b.onclick=fn;row.appendChild(b);return b};
@@ -940,6 +952,7 @@ function apprCard(sid,kind){
     if(canApprove())mk('差し戻す','ng',()=>reject(sid));
     if(canEditScore())mk('取り下げる','',()=>withdraw(sid));
   }
+  (function(){const rel=(NOTES||[]).filter(n=>n.sid===sid&&!n.done);if(rel.length&&(canApprove()||canEditScore()))mk('関連メモを解決済みにする','',async()=>{rel.forEach(n=>n.done=true);try{await saveNotes(NOTES);toast('メモ'+rel.length+'件を解決済みにしました');drawAppr()}catch(e){rel.forEach(n=>n.done=false);toast('保存に失敗しました：'+emsg(e))}})})();
   return el;
 }
 function drawAppr(){
@@ -1069,6 +1082,7 @@ function openNoteSheet(){
     <div class="sub">${esc(s.title)}${s.pages.length>1?'（'+pg+'ページ目）':''}</div>
     <div class="cats" id="cats">${CATS.map((c,i)=>`<button data-c="${i}"${i===0?' class="on"':''}>${c}</button>`).join('')}</div>
     <textarea id="ntext" placeholder="例：2段目のコードが違う／3行目の歌詞が抜けている"></textarea>
+    ${canEditScore()?'<div class="hint" style="margin:6px 0 2px">自分で直せるときは、メモの代わりに右上の ✎ で楽譜に直接書けます（完了→承認で全員に反映）</div>':''}
     <button class="btn" id="nsave">メモを保存</button>
     <button class="btn ghost" id="ncancel" style="margin-top:8px">キャンセル</button>
   </div>`;
