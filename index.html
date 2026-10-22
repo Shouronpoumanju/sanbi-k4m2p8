@@ -110,7 +110,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='202610110130';
+const BUILD='202610221030';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -162,7 +162,7 @@ let draft=load(LS_DRAFT)||{t:'今週の賛美',s:nextSunday()+' 礼拝',l:[]};
 function load(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
 function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3200)}
-function emsg(e){const m=''+(e&&e.message||e);if(/401/.test(m))return 'トークンが無効か期限切れです。管理画面の「配信設定」で新しいトークンを保存してください';if(/403/.test(m))return 'GitHubに拒否されました（権限不足かAPI制限）。少し待つかトークンを確認してください';if(/409|422/.test(m))return '他の端末と同時に保存されたようです。もう一度お試しください';return m}
+function emsg(e){const m=''+(e&&e.message||e);if(/401|no pat|書き込み用の設定/.test(m)){setTimeout(()=>{try{openReauthSheet()}catch(x){}},500);return '合言葉をもう一度入れると直ります'}if(/403/.test(m))return 'GitHubに拒否されました（権限不足かAPI制限）。少し待つかトークンを確認してください';if(/409|422/.test(m))return '他の端末と同時に保存されたようです。もう一度お試しください';return m}
 function nextSunday(){const d=new Date();d.setDate(d.getDate()+((7-d.getDay())%7));return `${d.getMonth()+1}月${d.getDate()}日(日)`}
 function esc(t){return(t||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function enc8(s){return new TextEncoder().encode(s)}
@@ -179,6 +179,41 @@ async function wl(on){try{
 document.addEventListener('visibilitychange',()=>{const V0=document.getElementById('viewer');if(document.visibilityState==='visible'&&V0&&V0.classList.contains('on'))wl(true)});
 
 /* ---------- crypto ---------- */
+/* ws_autotoken_v1：合言葉から作った鍵を端末に保存し、keys.json の最新トークンを毎回自動で取り込む */
+const LS_KEK='ws_kek_v1';
+async function kekBits(passcode,saltB64,iters){const base=await crypto.subtle.importKey('raw',enc8(passcode),{name:'PBKDF2'},false,['deriveBits']);return crypto.subtle.deriveBits({name:'PBKDF2',salt:b64d(saltB64),iterations:iters,hash:'SHA-256'},base,256)}
+async function kekFromBits(bits){return crypto.subtle.importKey('raw',bits,{name:'AES-GCM'},false,['decrypt'])}
+function tierOf(r){return TIERS.find(T=>T.r===r)}
+async function autoToken(){
+  const T=tierOf(role());if(!T||!T.t||!KEYS||!KEYS[T.t])return 'na';
+  const kb=load(LS_KEK);if(!kb||kb.r!==T.r)return 'nokek';
+  try{const kek=await kekFromBits(b64d(kb.k));const tw=b64d(KEYS[T.t]);
+    const tok=new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:tw.slice(0,12)},kek,tw.slice(12)));
+    if(tok&&tok!==load(LS_PAT)){save(LS_PAT,tok);return 'updated'}return 'ok'}
+  catch(e){return 'badkek'}
+}
+function tokenStale(){const T=tierOf(role());if(!T||!T.t)return false;const p=load(LS_PAT)||'';return !p||/^ghp_/.test(p)||window.__tokstate==='badkek'}
+async function reauth(passcode){
+  const T=tierOf(role());if(!T||!T.t)throw new Error('この役割には不要です');
+  const bits=await kekBits(passcode,KEYS[T.s],KEYS.iters);const kek=await kekFromBits(bits);
+  const w=b64d(KEYS[T.w]);await crypto.subtle.decrypt({name:'AES-GCM',iv:w.slice(0,12)},kek,w.slice(12));
+  const tw=b64d(KEYS[T.t]);const tok=new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:tw.slice(0,12)},kek,tw.slice(12)));
+  save(LS_KEK,{r:T.r,k:b64e(bits)});save(LS_PAT,tok);window.__tokstate='ok';
+}
+function openReauthSheet(msg){
+  const sh=document.getElementById('sheet');if(!sh||sh.querySelector('#rapw'))return;
+  sh.innerHTML='<div class="sheetbox"><h3>🔑 合言葉をもう一度</h3><div class="sub">'+esc(msg||'配信用の鍵を取り直します。この端末では今回だけで、以後は自動です。')+'</div>'
+   +'<input class="search" id="rapw" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" placeholder="'+esc(ROLENAME[role()]||'')+'の合言葉" style="margin-top:10px">'
+   +'<button class="btn" id="raok" style="margin-top:8px">取り直す</button><button class="btn ghost" id="rang" style="margin-top:8px">あとで</button></div>';
+  sh.classList.add('on');sh.onclick=e=>{if(e.target===sh)sh.classList.remove('on')};
+  const inp=document.getElementById('rapw');setTimeout(()=>inp.focus(),80);
+  document.getElementById('rang').onclick=()=>sh.classList.remove('on');
+  const go=async()=>{const v=inp.value.trim();if(!v){toast('合言葉を入れてください');return}const b=document.getElementById('raok');b.disabled=true;b.textContent='確認中…';
+    let ok=false;for(const c of [v,v.toLowerCase(),v.charAt(0).toLowerCase()+v.slice(1)]){try{await reauth(c);ok=true;break}catch(e){}}
+    if(!ok){b.disabled=false;b.textContent='取り直す';toast('合言葉が違うようです');return}
+    sh.classList.remove('on');toast('準備ができました。もう一度ボタンを押してください');try{render()}catch(e){}};
+  document.getElementById('raok').onclick=go;inp.onkeydown=e=>{if(e.key==='Enter')go()};
+}
 async function deriveKEK(passcode,saltB64,iters){
   const base=await crypto.subtle.importKey('raw',enc8(passcode),{name:'PBKDF2'},false,['deriveBits']);
   const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:b64d(saltB64),iterations:iters,hash:'SHA-256'},base,256);
@@ -194,10 +229,10 @@ async function unlockWith(passcode){
     const T=TIERS[i];
     if(!KEYS[T.w]||!KEYS[T.s])continue;
     try{
-      const kek=await deriveKEK(passcode,KEYS[T.s],KEYS.iters);
+      const kbits=await kekBits(passcode,KEYS[T.s],KEYS.iters);const kek=await kekFromBits(kbits);
       const w=b64d(KEYS[T.w]);
       rawK=await crypto.subtle.decrypt({name:'AES-GCM',iv:w.slice(0,12)},kek,w.slice(12));
-      hit=T;
+      hit=T;if(T.t)save(LS_KEK,{r:T.r,k:b64e(kbits)});
       if(T.t&&KEYS[T.t]){
         try{const tw=b64d(KEYS[T.t]);
           save(LS_PAT,new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:tw.slice(0,12)},kek,tw.slice(12))));
@@ -274,6 +309,7 @@ function showUnlock(msg){
 }
 async function boot(){
   app.innerHTML='<div class="center"><div class="spin"></div><div>展開中…</div></div>';
+  try{window.__tokstate=await autoToken()}catch(e){}
   SONGS=await decJSON('data.enc');fixIdx(SONGS);BYID={};SONGS.forEach(s=>BYID[s.id]=s);try{PAGEINFO=await decJSON('pages.enc')||{}}catch(e){PAGEINFO={}}loadEditorInfo();
   PUB=await fetchPub();
   EDITS=await fetchEdits();
@@ -301,7 +337,7 @@ async function fetchPub(){
 async function publish(){
   const pat=load(LS_PAT);
   const btn=document.getElementById('pub');
-  if(!pat){toast('先に下の「配信設定」でトークンを保存してください');const p=document.getElementById('pat');if(p)p.scrollIntoView({behavior:'smooth',block:'center'});return}
+  if(!pat){openReauthSheet();return}
   if(!draft.l.length){toast('曲を選んでください');return}
   if(btn){btn.disabled=true;btn.textContent='配信中…'}
   try{
@@ -402,6 +438,7 @@ function renderHome(){
     const lb=document.createElement('button');lb.className='btn ghost';lb.textContent='📚 楽譜ライブラリ（'+SONGS.length+'曲）';lb.onclick=()=>{route='lib';render()};m.appendChild(lb);
     const nb=document.createElement('button');nb.className='btn ghost';nb.textContent='🚩 気づきメモ'+(openCount()?'（'+openCount()+'件）':'');nb.onclick=()=>{route='notes';render()};m.appendChild(nb);
     const ab=document.createElement('button');ab.className='btn ghost';ab.textContent='✎ 楽譜の修正'+editBadge();ab.onclick=()=>{route='appr';render()};m.appendChild(ab);
+    if(tokenStale()){const tb=document.createElement('div');tb.className='hint';tb.style.cssText='border:1px solid #c0392b;border-radius:12px;padding:10px;margin:6px 0;color:#c0392b;font-weight:700';tb.innerHTML='🔑 配信用の鍵を取り直す必要があります（この端末で今回だけ）。<button class="btn" style="margin-top:6px" id="rabtn">合言葉を入れる</button>';m.appendChild(tb);setTimeout(()=>{const x=document.getElementById('rabtn');if(x)x.onclick=()=>openReauthSheet()},0)}
     if(canEditScore()&&!load('ws_edhint_v1')){const hb=document.createElement('div');hb.className='hint';hb.style.cssText='border:1px dashed var(--accent);border-radius:12px;padding:10px;margin:6px 0';hb.innerHTML='<b>楽譜の上に直接書いて直せます。</b>楽譜を開いて右上の ✎ → 間違いを指でなぞって正しい文字を入れる → 完了。承認されると全員に反映されます。 <button class="btn ghost" style="margin-top:6px" id="edhide">わかった</button>';m.appendChild(hb);setTimeout(()=>{const x=document.getElementById('edhide');if(x)x.onclick=()=>{save('ws_edhint_v1',1);hb.remove()}},0)}
     const eb=document.createElement('button');eb.className='btn ghost';eb.textContent='\u{1F3BC} \u30b3\u30fc\u30c9\u3092\u7f6e\u304f';eb.onclick=openEditor;eb.oncontextmenu=(ev)=>{ev.preventDefault();editorSheet()};m.appendChild(eb);
   }
@@ -415,7 +452,7 @@ function renderHome(){
       if(!armed){armed=true;lo.textContent='もう一度タップでログアウト';lo.classList.add('arm');
         tm=setTimeout(()=>{armed=false;lo.textContent='ログアウト';lo.classList.remove('arm')},4000);return}
       clearTimeout(tm);
-      try{localStorage.removeItem(LS_K);localStorage.removeItem(LS_ADMIN);localStorage.removeItem(LS_ROLE);localStorage.removeItem(LS_PAT);localStorage.removeItem(LS_DRAFT)}catch(e){}
+      try{localStorage.removeItem(LS_K);localStorage.removeItem(LS_ADMIN);localStorage.removeItem(LS_ROLE);localStorage.removeItem(LS_PAT);localStorage.removeItem(LS_DRAFT);localStorage.removeItem(LS_KEK)}catch(e){}
       location.replace(location.pathname);
     };
     wrap.appendChild(lab);wrap.appendChild(lo);wrap.appendChild(ver);m.appendChild(wrap);
@@ -498,10 +535,11 @@ function renderAdmin(){
   const SETTINGS=!isAdmin()?'':`
     <div class="secttl">配信設定</div>
     <div class="share" style="border-style:solid">
-      <div style="font-size:12.5px;color:var(--sub);line-height:1.5">配信ボタンを使うにはGitHubトークンをこの端末に1回だけ保存します。<span id="patstate" style="font-weight:800;color:var(--accent)"></span></div>
+      <div style="font-size:12.5px;color:var(--sub);line-height:1.5">配信用の鍵は合言葉から自動で取り込まれます（貼り付けは不要）。<span id="patstate" style="font-weight:800;color:var(--accent)"></span></div>
+      <details style="margin-top:8px"><summary style="font-size:12.5px;color:var(--sub);cursor:pointer">詳細：トークンを手で差し替える（GitHub側で発行し直した時だけ）</summary>
       <input class="search" id="pat" type="password" placeholder="GitHubトークンを貼り付け" autocomplete="off" style="margin:10px 0 8px">
       <input class="search" id="patpw" type="password" placeholder="管理の合言葉（新しいトークンを全端末に配る時だけ）" autocomplete="off" autocapitalize="none" style="margin:0 0 8px">
-      <button class="btn ghost" id="patsave" style="margin-top:0;padding:12px">トークンを保存</button>
+      <button class="btn ghost" id="patsave" style="margin-top:0;padding:12px">トークンを保存</button></details>
     </div>
     <div class="share" style="border-style:solid">
       <div style="font-size:12.5px;color:var(--sub);line-height:1.5">みんな（見る側）の合言葉を変更できます。変更後、新しい端末は新しい合言葉が必要になります（すでに開けている端末はそのまま見られます）。</div>
@@ -546,7 +584,7 @@ function renderAdmin(){
   document.getElementById('pub').onclick=()=>{commit();publish()};
   document.getElementById('copy').onclick=()=>{const u=document.getElementById('shareu').textContent;navigator.clipboard&&navigator.clipboard.writeText(u).then(()=>toast('コピーしました'),()=>toast('長押しでコピーしてください'))};
   if(isAdmin()){
-    const ps=document.getElementById('patstate');if(load(LS_PAT))ps.textContent='（設定済み）';
+    const ps=document.getElementById('patstate');if(load(LS_PAT))ps.textContent=tokenStale()?'（鍵の取り直しが必要）':'（自動取得済み）';
     document.getElementById('patsave').onclick=async()=>{
       const v=document.getElementById('pat').value.trim();
       if(!v){toast('トークンを貼り付けてください');return}
@@ -588,7 +626,7 @@ const TIERCFG={lib:{i:'lpass',st:'lstate',b:'lpasssave',s:'salt3',w:'wrapped3',t
 async function setTierPass(kind){
   const C=TIERCFG[kind];
   const pat=load(LS_PAT);
-  if(!pat){toast('先に配信設定でトークンを保存してください');return}
+  if(!pat){openReauthSheet();return}
   const np=document.getElementById(C.i).value.trim();
   if(np.length<6){toast('6文字以上にしてください');return}
   const btn=document.getElementById(C.b);btn.disabled=true;btn.textContent='設定中…';
@@ -620,7 +658,7 @@ async function setTierPass(kind){
 }
 async function changeViewerPass(){
   const pat=load(LS_PAT);
-  if(!pat){toast('先に配信設定でトークンを保存してください');return}
+  if(!pat){openReauthSheet();return}
   const np=document.getElementById('npass').value.trim();
   if(np.length<6){toast('6文字以上にしてください');return}
   const btn=document.getElementById('npasssave');btn.disabled=true;btn.textContent='変更中…';
