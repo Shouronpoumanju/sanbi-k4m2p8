@@ -104,6 +104,11 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 .slide .ovl{position:absolute;left:0;top:0;pointer-events:none;z-index:2}.slide.editing .ovl{pointer-events:auto;touch-action:none}.edtop.pv{top:auto;bottom:0;padding:9px 12px calc(9px + env(safe-area-inset-bottom))}.edtop{position:absolute;left:0;right:0;top:0;z-index:9;background:rgba(20,18,30,.93);color:#fff;font-size:12.5px;font-weight:700;padding:calc(7px + env(safe-area-inset-top)) 12px 7px;text-align:center;line-height:1.35}.edbar{position:absolute;left:0;right:0;bottom:0;z-index:9;background:rgba(20,18,30,.93);padding:8px 8px calc(8px + env(safe-area-inset-bottom));display:flex;gap:6px;flex-wrap:wrap;justify-content:center}.edbar button{border:none;border-radius:9px;padding:9px 11px;font-size:13px;font-weight:700;background:rgba(255,255,255,.16);color:#fff;cursor:pointer;font-family:inherit}.edbar button.on{background:var(--accent)}.edbar button.go{background:#2e9e5b}.edbar button:disabled{opacity:.5}.edmode .vclose,.edmode .vgear,.edmode .flagbtn,.edmode .turnbtn,.edmode .edge{display:none !important}.appr{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;background:var(--card)}.appr .t{font-weight:800;font-size:15px}.appr .d{font-size:12px;color:var(--sub);margin-top:3px}.appr .row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}.appr .row button{flex:1;min-width:120px;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:13.5px;font-weight:700;cursor:pointer;background:var(--bg);color:var(--ink);font-family:inherit}.appr .row button.ok{background:#2e9e5b;color:#fff;border-color:#2e9e5b}.appr .row button.ng{background:#c0392b;color:#fff;border-color:#c0392b}.badge{display:inline-block;font-size:11px;font-weight:800;border-radius:20px;padding:2px 8px;margin-left:6px;vertical-align:middle}.badge.w{background:#f6c445;color:#4a3a00}.badge.o{background:#2e9e5b;color:#fff}.badge.n{background:#c0392b;color:#fff}
 .tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 12px}.tools button{border:1.5px solid var(--accent);background:var(--card);color:var(--accent);border-radius:12px;padding:12px 6px;font-size:14.5px;font-weight:800;cursor:pointer;font-family:inherit;box-shadow:var(--shadow);line-height:1.2}.tools button .b{display:inline-block;min-width:20px;padding:1px 6px;border-radius:20px;background:var(--accent);color:#fff;font-size:11.5px;margin-left:5px;vertical-align:middle}.tools button .b.w{background:#f6c445;color:#4a3a00}
 .slide img.sub{scroll-snap-align:start;scroll-snap-stop:always}
+.vclose,.vgear{width:42px!important;height:42px!important;font-size:17px!important}.vedit{right:60px!important}
+.pageflag{top:calc(56px + env(safe-area-inset-top))!important}
+.stage:not(.two) .slide:first-child{padding-top:calc(52px + env(safe-area-inset-top))}
+.stage.inv img{filter:invert(.9) hue-rotate(180deg)}.stage.inv svg.ovl{filter:invert(.9) hue-rotate(180deg)}.stage.inv .slide img{background:#fff}.stage.inv,.stage.inv .slide{background:#161616}
+.songtag{position:absolute;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translateX(-50%);z-index:7;max-width:70%;background:rgba(20,18,30,.82);color:#fff;font-size:14px;font-weight:800;padding:8px 14px;border-radius:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;transition:opacity .4s}.songtag.hid{opacity:0}
 .mv button{width:36px;height:27px;font-size:13px}
 .seth{display:flex;align-items:center;justify-content:space-between;gap:8px}.seth .secttl{margin-right:auto}.seth .rm{padding:5px 9px;font-size:12px;margin-top:12px;white-space:nowrap}
 </style>
@@ -114,7 +119,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='202610240050';
+const BUILD='202610251200';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -1079,17 +1084,18 @@ async function splitCols(path,url){
 }
 function topOf(el){return el.classList.contains('sub')?el.parentElement.offsetTop+el.offsetTop:el.offsetTop}
 function snapTargets(){const st=document.getElementById('stage');if(!st)return [];const out=[];[...st.querySelectorAll('.slide')].filter(x=>x.offsetParent!==null).forEach(sl=>{const subs=sl.querySelectorAll('img.sub');if(subs.length)subs.forEach(x=>out.push(x));else out.push(sl)});return out}
-function openViewer(ids,idx,page){vIds=ids;vSong=idx;buildViewer();V.classList.add('on');wl(true);preload(idx+1);
+function openViewer(ids,idx,page){vIds=ids;vSong=idx;buildViewer();V.classList.add('on');wl(true);preload(idx+1);songTag();
   if(page&&page>1){setTimeout(()=>{const st=document.getElementById('stage');const sl=st?st.querySelectorAll('.slide'):[];if(sl[page-1])st.scrollTop=sl[page-1].offsetTop},250)}}
 function closeViewer(){if(ED){toast('先に「完了」か「やめる」を押してください');return}PREVIEW=null;V.classList.remove('on');wl(false);if(route==='appr'){try{drawAppr()}catch(e){}}}
 async function preload(i){const s=BYID[vIds[i]];if(!s)return;for(const p of s.pages){try{await decImg(p)}catch(e){}}}
 function buildViewer(){
   const s=cur();
+  window.__invMode=!!load('ws_inv_v1');
   window.__splitMode=splitWanted()&&!window.__forceNoSplit&&!(!!load(LS_TWO)&&window.innerWidth>window.innerHeight&&s.pages.length>1);
   const nt=PAGEINFO[s.id]||0;const slides=s.pages.map((p,pi)=>`<div class="slide load${(nt&&pi>=nt)?' scan':''}${pageSelClass(s.id,pi)}"><img data-enc="${p}" alt="">${s.pages.length>1?`<div class="pageflag">${pi+1} / ${s.pages.length}</div>`:''}</div>`).join('');
   V.innerHTML=`<div class="stage" id="stage">${slides}<div class="edge l" id="el"></div><div class="edge r" id="er"></div></div>
    <button class="vclose" id="vx" aria-label="閉じる">✕</button><button class="vgear" id="vgear" aria-label="表示の設定">⚙</button>${isStaff()?'<button class="vgear vedit" id="vedit" aria-label="この楽譜を直す">✎</button>':''}${s.pages.length>1?'<button class="turnbtn hid" id="vtwo">\u898b\u958b\u304d</button>':''}${(nt&&s.pages.length>nt)?'<button class="turnbtn hid" id="vscan" style="left:auto;right:66px">\u4e94\u7dda\u8b5c</button>':''}${isStaff()?'<button class="flagbtn" id="vflag" aria-label="メモ">🚩</button>':''}`;
-  const stage=document.getElementById('stage');stage.scrollTop=0;
+  const stage=document.getElementById('stage');stage.scrollTop=0;stage.classList.toggle('inv',!!window.__invMode);
   (function(){var msg=null;   if(PREVIEW&&PREVIEW.sid===s.id)msg='確認中：直したあとの表示です（まだ全員には出ていません）';   else if(isStaff()&&EDITS[s.id]&&EDITS[s.id].pd)msg=EDITS[s.id].pd.rej?'差し戻された修正があります（「楽譜の修正」で確かめてください）':'承認待ちの修正があります（まだ反映されていません）';   if(msg){var pb=document.createElement('div');pb.className='edtop pv';pb.textContent=msg;V.appendChild(pb)}})();
   hydrate();
   const vx=document.getElementById('vx');
@@ -1184,7 +1190,8 @@ async function hydrate(){const imgs=[...document.querySelectorAll('#stage img[da
       sl.classList.remove('load')}catch(e){}
     im.removeAttribute('data-enc')}
   try{drawOverlays()}catch(e){}}
-function go(i){if(i<0||i>=vIds.length)return;vSong=i;buildViewer();preload(i+1)}
+function songTag(){const s=cur();if(!s||vIds.length<2)return;let t=document.getElementById('songtag');if(!t){t=document.createElement('div');t.id='songtag';t.className='songtag';V.appendChild(t)}t.textContent=(vSong+1)+' / '+vIds.length+'　'+s.title;t.classList.remove('hid');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.add('hid'),2200)}
+function go(i){if(i<0||i>=vIds.length){toast(i<0?'最初の曲です':'最後の曲です');return}vSong=i;buildViewer();preload(i+1);songTag()}
 function zoom(img){const sl=img.parentElement,st=document.getElementById('stage');if(sl.classList.toggle('zoom')){st.style.scrollSnapType='none'}else{st.style.scrollSnapType='y mandatory';sl.scrollTop=0;sl.scrollLeft=0}setTimeout(function(){try{syncOvl(sl)}catch(e){}},0)}
 
 const LS_TWO='ws_two_v1';
@@ -1228,12 +1235,14 @@ function openViewSettings(){
     <div style="margin-top:10px">
     <label><input type="checkbox" id="vs_two"${two?' checked':''}><div>見開き（2ページを横に並べる）<div class="d">横向きのときだけ効きます</div></div></label>
     <label><input type="checkbox" id="vs_scan"${scan?' checked':''}><div>五線譜（元のスキャン）も表示する<div class="d">普段は清書の頁だけ。楽器の方は出しておくと便利です</div></div></label>
+    <label><input type="checkbox" id="vs_inv"${load('ws_inv_v1')?' checked':''}><div>楽譜を暗い色で表示する<div class="d">夜や暗いステージでまぶしくないように（白黒を反転）</div></div></label>
     <label><input type="checkbox" id="vs_split"${splitWanted()?' checked':''}><div>2段組の楽譜は段ごとに縦に並べる<div class="d">文字が約2倍の大きさになります（スマホ向け。見開きのときは効きません）</div></div></label>${(()=>{if(!s)return '';const sel=pageSel(s.id);return `<div class="pl"><div class="h">この曲で表示するページ（この端末だけ）</div>`+s.pages.map((p,i)=>`<label><input type="checkbox" class="vs_pg" data-i="${i}"${(sel?sel.includes(i):(!nt||i<nt||scan))?' checked':''}><div>${i+1}. ${pageLabel(nt,i,s.pages.length)}</div></label>`).join('')+`</div>`})()}
     </div>
     <div class="hint" style="margin-top:10px">ページ送り：画面の下側タップ＝次、上側＝前。足踏みペダルや矢印キーでも送れます。</div>
     <button class="btn" id="vs_ok" style="margin-top:8px">閉じる</button></div>`;
   sh.classList.add('on');
   document.getElementById('vs_two').onchange=e=>{save(LS_TWO,e.target.checked);if(window.__ws_two)window.__ws_two()};
+  document.getElementById('vs_inv').onchange=e=>{save('ws_inv_v1',e.target.checked);const st=document.getElementById('stage');if(st)st.classList.toggle('inv',e.target.checked)};
   document.getElementById('vs_split').onchange=e=>{save(LS_SPLIT,e.target.checked);if(window.__ws_two)window.__ws_two()};
   document.getElementById('vs_scan').onchange=e=>{save(LS_SCAN,e.target.checked);const st=document.getElementById('stage');if(st){const b=document.getElementById('vscan');if(b)b.click();else{st.classList.toggle('showscan',e.target.checked)}}};
   
