@@ -123,7 +123,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='202611071500';
+const BUILD='202611071800';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -1064,6 +1064,8 @@ async function analyzePage(path,url){
     const pad=Math.round(W*0.02);
     const box={l:Math.max(0,l-pad),t:Math.max(0,t-pad),r:Math.min(W,r+pad),b:Math.min(H,b+pad)};
     res={W:W,H:H,box:box,cols:null,th:0};
+    const rowsOf=(x0,x1)=>{const a=new Uint8Array(H);for(let y=0;y<H;y++){for(let x=x0;x<x1;x+=2){if(dark(x,y)){a[y]=1;break}}}return a};
+    res.rows=rowsOf(box.l,box.r);
     /* 2段組かどうか */
     try{
       const bottom=b;
@@ -1076,7 +1078,7 @@ async function analyzePage(path,url){
       const sx=best.x+Math.round(best.w/2);
       const cb=(x0,x1)=>{let l2=x1,r2=x0,t2=bottom,b2=yS;for(let y=yS;y<=bottom;y+=2){for(let x=x0;x<x1;x+=2){if(dark(x,y)){if(x<l2)l2=x;if(x>r2)r2=x;if(y<t2)t2=y;if(y>b2)b2=y}}}return (r2>l2&&(b2-t2)>H*0.12)?{l:Math.max(0,l2-pad),r:Math.min(W,r2+pad),t:Math.max(0,t2-pad),b:Math.min(H,b2+pad)}:null};
       const L=cb(0,sx),R=cb(sx,W);const cols=[L,R].filter(Boolean);
-      if(cols.length===2){res.cols=cols;res.th=yS>0?Math.min(H,yS+Math.round(H*0.012)):0;res.tt=box.t}
+      if(cols.length===2){res.cols=cols;res.th=yS>0?Math.min(H,yS+Math.round(H*0.012)):0;res.tt=box.t;res.crows=cols.map(c=>rowsOf(c.l,c.r))}
     }catch(e){}
   }catch(e){res=null}
   pageInfo[path]=res;return res;
@@ -1089,6 +1091,38 @@ async function cutImg(key,img,parts){ /* parts: [{sx,sy,sw,sh,dx,dy,dw,dh}], 出
   const blob=await new Promise(r=>oc.toBlob(r,'image/webp',0.92));
   const u=URL.createObjectURL(blob);cutCache[key]=u;return u;
 }
+function cutsAt(rows,t,b,k,H){
+  if(k<=1)return [t,b];const minGap=Math.max(10,Math.round(H*0.009));const gaps=[];let run=0,st=0;
+  for(let y=t;y<=b;y++){if(!rows[y]){if(!run)st=y;run++}else{if(run>=minGap)gaps.push({m:st+Math.floor(run/2),n:run});run=0}}
+  const out=[t];const seg=(b-t)/k;
+  for(let j=1;j<k;j++){const target=t+seg*j;let best=null,bs=1e9;
+    for(const g of gaps){if(g.m<=out[out.length-1]+seg*0.4)continue;const d=Math.abs(g.m-target);if(d>seg*0.3)continue;const sc=d-g.n*1.5;if(sc<bs){bs=sc;best=g}}
+    if(!best)return null;out.push(best.m)}
+  out.push(b);return out}
+/* 画面に合わせた並べ方を決める：1頁のまま／2段に分ける／上下に区切る（大きくなるときだけ） */
+function planLayout(a,A,allowMulti){
+  const B=a.box,cands=[];
+  const whole=(k)=>{const cs=cutsAt(a.rows,B.t,B.b,k,a.H);if(!cs)return null;const parts=[];
+    for(let i=0;i<k;i++){const y0=cs[i],y1=cs[i+1];parts.push({w:B.r-B.l,h:y1-y0,list:[{sx:B.l,sy:y0,sw:B.r-B.l,sh:y1-y0,dx:0,dy:0,dw:B.r-B.l,dh:y1-y0}]})}
+    return parts};
+  const colsK=(k)=>{if(!a.cols)return null;const cw=Math.max.apply(null,a.cols.map(c=>c.r-c.l));const tH=a.th>a.tt?Math.round((a.th-a.tt)*cw/a.W):0;const parts=[];
+    for(let ci=0;ci<a.cols.length;ci++){const c=a.cols[ci];const cs=cutsAt(a.crows[ci],c.t,c.b,k,a.H);if(!cs)return null;
+      for(let i=0;i<k;i++){const y0=cs[i],y1=cs[i+1];const head=(i===0&&tH>0)?tH:0;const list=[];
+        if(head)list.push({sx:0,sy:a.tt,sw:a.W,sh:a.th-a.tt,dx:0,dy:0,dw:cw,dh:tH});
+        list.push({sx:c.l,sy:y0,sw:c.r-c.l,sh:y1-y0,dx:0,dy:head,dw:c.r-c.l,dh:y1-y0});parts.push({w:cw,h:head+(y1-y0),list:list})}}
+    return parts};
+  const sc=ps=>Math.min.apply(null,ps.map(q=>Math.min(A.w/q.w,A.h/q.h)));
+  let best={parts:whole(1),gain:1.0};best.s=sc(best.parts);
+  if(allowMulti){
+    const tries=[];
+    if(a.cols){const c1=colsK(1);if(c1)tries.push({parts:c1,need:1.12})}
+    /* 上下に区切るのは横長の画面（スマホの横向きなど）だけ。縦向きでは段分けまで（めくる回数を増やしすぎない） */
+    /* 2段組の頁を上下に区切ると読む順番がばらばらになるので、段ごとに区切る */
+    if(A.w>A.h){if(!a.cols)for(const k of [2,3]){const w=whole(k);if(w)tries.push({parts:w,need:1.25})}
+      if(a.cols){const c2=colsK(2);if(c2)tries.push({parts:c2,need:1.25})}}
+    tries.filter(t=>t.parts.length<=4).sort((x,y)=>x.parts.length-y.parts.length).forEach(t=>{const s2=sc(t.parts);if(s2>best.s*t.need){best={parts:t.parts,s:s2}}});
+  }
+  return best.parts}
 function fitArea(){const st=document.getElementById('stage');if(!st)return {w:innerWidth,h:innerHeight};const two=st.classList.contains('two');
   return {w:st.clientWidth*(two?0.5:1)-4,h:(parseFloat(st.style.getPropertyValue('--sh'))||st.clientHeight)*0.985}}
 function setSH(){const st=document.getElementById('stage');if(st&&st.clientHeight)st.style.setProperty('--sh',st.clientHeight+'px')}
@@ -1197,28 +1231,17 @@ async function hydrate(){const imgs=[...document.querySelectorAll('#stage img[da
       if(!raw&&!(ops[pi]&&ops[pi].length)&&st.contains(sl)){
         const a=await analyzePage(p,url);
         if(a){
-          const A=fitArea();const B=a.box,bw=B.r-B.l,bh=B.b-B.t;
-          const sWhole=Math.min(A.w/bw,A.h/bh);
-          let useSplit=false,plan=null;
-          if(a.cols&&splitWanted()&&!st.classList.contains('two')&&(!nt||pi<nt)){
-            const cw=Math.max.apply(null,a.cols.map(c=>c.r-c.l));
-            const tH=a.th>a.tt?Math.round((a.th-a.tt)*cw/W0(a)):0;
-            plan=a.cols.map(c=>({c:c,w:cw,h:tH+(c.b-c.t)}));
-            const sSplit=Math.min.apply(null,plan.map(q=>Math.min(A.w/q.w,A.h/q.h)));
-            if(sSplit>sWhole*1.12)useSplit={tH:tH,cw:cw};
-          }
+          const A=fitArea();
+          const multi=splitWanted()&&!st.classList.contains('two')&&(!nt||pi<nt);
+          const parts=planLayout(a,A,multi);
           const img0=new Image();img0.src=url;await (img0.decode?img0.decode():new Promise(r=>{img0.onload=r}));
-          if(useSplit&&st.contains(sl)){
-            const ps=[];
-            for(let k=0;k<plan.length;k++){const q=plan[k],c=q.c;const list=[];
-              if(useSplit.tH>0)list.push({sx:0,sy:a.tt,sw:a.W,sh:a.th-a.tt,dx:0,dy:0,dw:q.w,dh:useSplit.tH});
-              list.push({sx:c.l,sy:c.t,sw:c.r-c.l,sh:c.b-c.t,dx:0,dy:useSplit.tH,dw:c.r-c.l,dh:c.b-c.t});
-              ps.push(await cutImg(p+'#c'+k,img0,{ow:q.w,oh:q.h,list:list}))}
+          if(parts.length>1&&st.contains(sl)){
+            const ps=[];for(let k=0;k<parts.length;k++){const q=parts[k];ps.push(await cutImg(p+'#'+parts.length+'_'+k+'_'+q.list[q.list.length-1].sx+'_'+q.list[q.list.length-1].sy,img0,{ow:q.w,oh:q.h,list:q.list}))}
             im.remove();sl.classList.remove('fit');sl.classList.add('splitp');
             ps.forEach(u=>{const bx=document.createElement('div');bx.className='subbox';const x=document.createElement('img');x.className='sub';x.alt='';x.src=u;bindZoom(x);bx.appendChild(x);sl.insertBefore(bx,sl.querySelector('.pageflag'))});
             done=true;
-          }else if(st.contains(sl)){
-            im.src=await cutImg(p+'#w',img0,{ow:bw,oh:bh,list:[{sx:B.l,sy:B.t,sw:bw,sh:bh,dx:0,dy:0,dw:bw,dh:bh}]});done=true;
+          }else if(st.contains(sl)){const q=parts[0];
+            im.src=await cutImg(p+'#w',img0,{ow:q.w,oh:q.h,list:q.list});done=true;
           }
         }
       }
@@ -1274,7 +1297,7 @@ function openViewSettings(){
     <label><input type="checkbox" id="vs_two"${two?' checked':''}><div>見開き（2ページを横に並べる）<div class="d">横向きのときだけ効きます</div></div></label>
     <label><input type="checkbox" id="vs_scan"${scan?' checked':''}><div>五線譜（元のスキャン）も表示する<div class="d">普段は清書の頁だけ。楽器の方は出しておくと便利です</div></div></label>
     <label><input type="checkbox" id="vs_inv"${load('ws_inv_v1')?' checked':''}><div>楽譜を暗い色で表示する<div class="d">夜や暗いステージでまぶしくないように（白黒を反転）</div></div></label>
-    <label><input type="checkbox" id="vs_split"${splitWanted()?' checked':''}><div>2段組の楽譜は段ごとに縦に並べてよい<div class="d">そのほうが大きく見える画面（スマホの縦向きなど）のときだけ並べ替えます。楽譜はいつも画面にまるごと収まる大きさで出ます</div></div></label>${(()=>{if(!s)return '';const sel=pageSel(s.id);return `<div class="pl"><div class="h">この曲で表示するページ（この端末だけ）</div>`+s.pages.map((p,i)=>`<label><input type="checkbox" class="vs_pg" data-i="${i}"${(sel?sel.includes(i):(!nt||i<nt||scan))?' checked':''}><div>${i+1}. ${pageLabel(nt,i,s.pages.length)}</div></label>`).join('')+`</div>`})()}
+    <label><input type="checkbox" id="vs_split"${splitWanted()?' checked':''}><div>大きく見えるように区切って並べてよい<div class="d">2段組を段ごとに、横向きのスマホでは上下に区切って、1画面ずつ大きく出します（そのほうが大きくなるときだけ）。オフにすると1ページずつ</div></div></label>${(()=>{if(!s)return '';const sel=pageSel(s.id);return `<div class="pl"><div class="h">この曲で表示するページ（この端末だけ）</div>`+s.pages.map((p,i)=>`<label><input type="checkbox" class="vs_pg" data-i="${i}"${(sel?sel.includes(i):(!nt||i<nt||scan))?' checked':''}><div>${i+1}. ${pageLabel(nt,i,s.pages.length)}</div></label>`).join('')+`</div>`})()}
     </div>
     <div class="hint" style="margin-top:10px">ページ送り：画面の下側タップ＝次、上側＝前。足踏みペダルや矢印キーでも送れます。</div>
     <button class="btn" id="vs_ok" style="margin-top:8px">閉じる</button></div>`;
