@@ -123,7 +123,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='202611071800';
+const BUILD='202611141600';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -323,7 +323,7 @@ function showUnlock(msg){
 async function boot(){
   app.innerHTML='<div class="center"><div class="spin"></div><div>展開中…</div></div>';
   try{window.__tokstate=await autoToken()}catch(e){}
-  SONGS=await decJSON('data.enc');fixIdx(SONGS);BYID={};SONGS.forEach(s=>BYID[s.id]=s);try{PAGEINFO=await decJSON('pages.enc')||{}}catch(e){PAGEINFO={}}loadEditorInfo();
+  SONGS=await decJSON('data.enc');/* ws_pagever_v1：楽譜の版を付けて取りに行く（差し替えた楽譜がすぐ全員に届く） */SONGS.forEach(s=>{if(s.v&&s.pages)s.pages=s.pages.map(p=>p+'?v='+s.v)});fixIdx(SONGS);BYID={};SONGS.forEach(s=>BYID[s.id]=s);try{PAGEINFO=await decJSON('pages.enc')||{}}catch(e){PAGEINFO={}}loadEditorInfo();
   PUB=await fetchPub();
   EDITS=await fetchEdits();
   if(isStaff())NOTES=await fetchNotes();
