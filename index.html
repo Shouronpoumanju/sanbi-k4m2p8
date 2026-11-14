@@ -124,7 +124,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='202611151000';
+const BUILD='202611151100';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -878,20 +878,25 @@ function chordChips(){const out=[];const add=c=>{if(c&&!out.includes(c))out.push
 const chordFsCache={};
 async function chordSize(path,url){
   if(chordFsCache[path]!==undefined)return chordFsCache[path];
-  let v=0;
+  let v=0,bold=0;
   try{const img=new Image();img.src=url;await (img.decode?img.decode():new Promise((r,j)=>{img.onload=r;img.onerror=j}));
     const W=img.naturalWidth,H=img.naturalHeight;const cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d',{willReadFrequently:true});
     cx.drawImage(img,0,0);const d=cx.getImageData(0,0,W,H).data;const runs=[];let run=0;
-    for(let y=0;y<H;y++){let red=false;for(let x=0;x<W;x+=2){const i=(y*W+x)*4;if(d[i]>150&&d[i+1]<110&&d[i+2]<100&&d[i]-d[i+1]>70){red=true;break}}
-      if(red)run++;else{if(run>=H*0.006&&run<=H*0.05)runs.push(run);run=0}}
-    if(runs.length>=2){runs.sort((a,b)=>a-b);const h=runs[Math.floor(runs.length*0.25)];v=Math.round(h/0.72/(W/1000));if(v<12||v>60)v=0}
+    const isRed=i=>d[i]>150&&d[i+1]<110&&d[i+2]<100&&d[i]-d[i+1]>70;
+    for(let y=0;y<=H;y++){let red=false;if(y<H)for(let x=0;x<W;x+=2){if(isRed((y*W+x)*4)){red=true;break}}
+      if(red)run++;else{if(run>=H*0.006&&run<=H*0.05)runs.push([run,y-run]);run=0}}
+    if(runs.length>=2){const hs=runs.map(r=>r[0]).sort((a,b)=>a-b);const h=hs[Math.floor(hs.length*0.25)];const px=h/0.72;v=Math.round(px/(W/1000));if(v<12||v>60)v=0;
+      /* 字の太さ：赤い横並びの長さの平均が字の大きさの14%より大きければ太字の楽譜（新しい清書）、小さければ細字（前からの清書） */
+      if(v){let sum=0,n=0;for(const r of runs){for(let y=r[1];y<r[1]+r[0];y++){let len=0;for(let x=0;x<=W;x++){if(x<W&&isRed((y*W+x)*4))len++;else if(len){sum+=len;n++;len=0}}}}
+        bold=(n&&sum/n/px>0.14)?1:0}}
   }catch(e){v=0}
-  chordFsCache[path]=v;return v}
-function chordFs(pi){const base=(ED.cfs&&ED.cfs[pi])||0;return base?Math.round(base*[0.8,1,1.25][ED.fs]):CSZ[ED.fs]}
+  chordFsCache[path]=v?{fs:v,b:bold}:0;return chordFsCache[path]}
+function chordFs(pi){const base=(ED.cfs&&ED.cfs[pi]&&ED.cfs[pi].fs)||0;return base?Math.round(base*[0.8,1,1.25][ED.fs]):CSZ[ED.fs]}
+function chordBold(pi){return (ED.cfs&&ED.cfs[pi]&&ED.cfs[pi].b)?1:0}
 function placeChord(pi,p){pushUndo();const L=(ED.ops[pi]=ED.ops[pi]||[]);const fs=chordFs(pi);let y=p.y,bd=15;
   /* 同じ行にもう置いてあるコードがあれば、高さをそろえる */
   L.forEach(o=>{if(o.t==='t'&&o.c){const d=Math.abs(o.y-p.y);if(d<bd){bd=d;y=o.y}}});
-  L.push({t:'t',x:Math.max(0,p.x-Math.round(ED.chord.length*fs*0.3)),y:y,fs:fs,b:1,s:ED.chord,c:CHORDC});drawOverlays()}
+  L.push({t:'t',x:Math.max(0,p.x-Math.round(ED.chord.length*fs*0.29)),y:y,fs:fs,b:chordBold(pi),s:ED.chord,c:CHORDC});drawOverlays()}
 function openChordSheet(){
   const sh=document.getElementById('sheet');const S={r:'',a:'',q:'',b:'',ba:'',bass:false};
   const name=()=>S.r?(S.r+S.a+S.q+(S.b?'/'+S.b+S.ba:'')):'';
@@ -1001,7 +1006,7 @@ function openTextSheet(pi,p,bold,pre){
   document.getElementById('etng').onclick=()=>sh.classList.remove('on');
   const put=function(isChord){const v=inp.value.trim();if(!v){sh.classList.remove('on');return}
     pushUndo();const L=(ED.ops[pi]=ED.ops[pi]||[]);if(pre)L.push(pre);
-    const o={t:'t',x:p.x,y:p.y,fs:isChord?chordFs(pi):FSZ[ED.fs],b:isChord?1:0,s:v};if(isChord)o.c=CHORDC;
+    const o={t:'t',x:p.x,y:p.y,fs:isChord?chordFs(pi):FSZ[ED.fs],b:isChord?chordBold(pi):0,s:v};if(isChord)o.c=CHORDC;
     L.push(o);sh.classList.remove('on');drawOverlays()};
   if(pre){document.getElementById('etc').onclick=()=>put(true);document.getElementById('etl').onclick=()=>put(false);inp.onkeydown=e=>{if(e.key==='Enter')put(true)};}
   else{document.getElementById('etok').onclick=()=>put(!!bold);inp.onkeydown=e=>{if(e.key==='Enter')put(!!bold)};}
