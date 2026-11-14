@@ -17,12 +17,18 @@ self.addEventListener('fetch',e=>{
     const v=u.searchParams.get('v')||'';const key=u.origin+u.pathname+(v?'?v='+v:'');
     e.respondWith(caches.open(CACHE).then(async c=>{
       const hit=await c.match(key);if(hit)return hit;
-      const r=await fetch(v?req:new Request(req.url,{cache:'no-cache'}));
-      if(r.ok&&v){
-        for(const k of await c.keys()){const ku=new URL(k.url);if(ku.pathname===u.pathname&&ku.search!==u.search)await c.delete(k)}
-        c.put(key,r.clone());
+      try{
+        const r=await fetch(v?req:new Request(req.url,{cache:'no-cache'}));
+        if(r.ok&&v){
+          for(const k of await c.keys()){const ku=new URL(k.url);if(ku.pathname===u.pathname&&ku.search!==u.search)await c.delete(k)}
+          c.put(key,r.clone());
+        }
+        return r;
+      }catch(err){
+        /* 電波が無いとき：新しい版が取れなければ、手元にある前の版を出す（何も出ないよりよい） */
+        for(const k of await c.keys()){if(new URL(k.url).pathname===u.pathname){const old=await c.match(k);if(old)return old}}
+        throw err;
       }
-      return r;
     }));return;
   }
   if(isApiRaw||isData||isShell){
