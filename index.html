@@ -124,7 +124,7 @@ html.dark .lyr{color:var(--accent2);border-color:var(--accent2)}
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 <script>
-const BUILD='202611151100';
+const BUILD='202611261500';
 const LS_DRAFT='ws_draft_v1',LS_DARK='ws_dark_v1',LS_K='ws_k_v1',LS_HIDE='ws_hidden_v1',LS_PAT='ws_pat_v1';
 const REPO_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/setlist.enc';
 const KEYS_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/keys.json';
@@ -339,10 +339,11 @@ async function boot(){
   app.innerHTML='<div class="center"><div class="spin"></div><div>展開中…</div></div>';
   try{window.__tokstate=await autoToken()}catch(e){}
   SONGS=await decJSON('data.enc');/* ws_pagever_v1：楽譜の版を付けて取りに行く（差し替えた楽譜がすぐ全員に届く） */SONGS.forEach(s=>{if(s.v&&s.pages)s.pages=s.pages.map(p=>p+'?v='+s.v)});fixIdx(SONGS);BYID={};SONGS.forEach(s=>BYID[s.id]=s);try{PAGEINFO=await decJSON('pages.enc')||{}}catch(e){PAGEINFO={}}loadEditorInfo();
-  PUB=await fetchPub();
+  PUB=await fetchPub();schedulePub();
   EDITS=await fetchEdits();
   if(isStaff())NOTES=await fetchNotes();
-  if(PUB&&PUB.l)setTimeout(()=>{try{PUB.l.forEach(id=>{const s0=BYID[id];if(s0)s0.pages.forEach(pp=>{fetch(pp).catch(()=>{})})})}catch(e){}},1500);
+  /* 今週の分と、1週間以内に始まる予約の分は、先に取っておく（電波が無くても開けるように） */
+  setTimeout(()=>{try{const ids=new Set((PUB&&PUB.l)||[]);rsvList().forEach(e=>{if(e.from-Date.now()<7*86400000)e.l.forEach(i=>ids.add(i))});ids.forEach(id=>{const s0=BYID[id];if(s0)s0.pages.forEach(pp=>{fetch(pp).catch(()=>{})})})}catch(e){}},1500);
   shared=parseHash();render();
   window.addEventListener('hashchange',()=>{if(location.hash==='#reset'){try{localStorage.removeItem(LS_K);localStorage.removeItem(LS_ADMIN);localStorage.removeItem(LS_ROLE);localStorage.removeItem(LS_PAT)}catch(e){};location.reload();return}shared=parseHash();route='home';render()});
 }
@@ -350,17 +351,96 @@ async function boot(){
 function parseHash(){const h=location.hash.replace(/^#/,'');if(!h)return null;const p=new URLSearchParams(h);const l=(p.get('l')||'').split(',').filter(Boolean);if(!l.length)return null;const d=+(p.get('d')||0);if(!d||Date.now()-d>604800000)return{expired:true};return{t:decodeURIComponent(p.get('t')||'今週の賛美'),s:decodeURIComponent(p.get('s')||''),l}}
 function buildLink(o){return location.origin+location.pathname+'#t='+encodeURIComponent(o.t)+'&s='+encodeURIComponent(o.s)+'&l='+o.l.join(',')+'&d='+Date.now()}
 async function fetchPub(){
-  let u=null;
+  let u=null,cur=null;
   try{const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),6000);
     const r=await fetch(REPO_API+'?ref=main&cb='+Date.now(),{headers:rawH(),cache:'no-store',signal:ac.signal});clearTimeout(tm);
     if(r.ok)u=b64d((await r.text()).trim());}catch(e){}
   if(!u){try{const r2=await fetch('setlist.enc',{cache:'no-cache'});if(r2.ok)u=b64d((await r2.text()).trim());}catch(e){}}
-  if(!u||u.length<13)return null;
-  try{const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(0,12)},CKEY,u.slice(12));
-    const o=JSON.parse(new TextDecoder().decode(pt));
-    if(!o.d||Date.now()-o.d>604800000)return null;
-    if(!o.l||!o.l.length)return null;
-    return o;}catch(e){return null}
+  if(u&&u.length>=13){try{const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(0,12)},CKEY,u.slice(12));cur=JSON.parse(new TextDecoder().decode(pt))}catch(e){cur=null}}
+  /* 予約は別のファイル（plan.enc）。古い版のアプリが「配信する」を押しても予約が消えないように分けてある。
+     見るだけの人は公開ページの写しから読む（GitHubの回数制限を使わない）。職員は鍵つきで最新を読む */
+  let q=null;
+  if(load(LS_PAT)){try{const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),6000);
+    const r=await fetch(PLAN_API+'?ref=main&cb='+Date.now(),{headers:rawH(),cache:'no-store',signal:ac.signal});clearTimeout(tm);
+    if(r.ok)q=await decPlan((await r.text()).trim());else if(r.status===404)q=[]}catch(e){}}
+  if(q===null){try{const r2=await fetch('plan.enc',{cache:'no-cache'});if(r2.ok)q=await decPlan((await r2.text()).trim())}catch(e){}}
+  PUBRAW=Object.assign({},(cur&&typeof cur==='object')?cur:{},{q:q||[]});pubAt=Date.now();return pickPub(PUBRAW);
+}
+async function decPlan(txt){try{const u=b64d(txt);if(u.length<13)return [];const o=JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(0,12)},CKEY,u.slice(12))));return (o&&Array.isArray(o.q))?o.q:[]}catch(e){return []}}
+const PLAN_API='https://api.github.com/repos/Shouronpoumanju/sanbi-k4m2p8/contents/plan.enc';
+/* ws_reserve_v1：配信の予約。plan.enc に q（予約の列）を持ち、各端末が「いま有効な1件」を時計で選ぶ。
+   ・いちばん新しく始まったもの（今すぐ配信 d ／ 予約 from）が出る　・始まってから1週間で消える */
+let PUBRAW=null,pubAt=0,pubTimer=null,RSVEDIT=null;
+function pickPub(o){if(!o||typeof o!=='object')return null;const now=Date.now(),c=[];
+  if(o.l&&o.l.length&&o.d)c.push({t:o.t,s:o.s,l:o.l,d:o.d});
+  (o.q||[]).forEach(e=>{if(e&&e.l&&e.l.length&&e.from<=now)c.push({t:e.t||'今週の賛美',s:e.s||'',l:e.l,d:e.from,rid:e.id})});
+  c.sort((a,b)=>b.d-a.d);const a=c[0];if(!a||now-a.d>604800000)return null;return a}
+function rsvList(){return ((PUBRAW&&PUBRAW.q)||[]).filter(e=>e&&e.l&&e.l.length&&e.from).sort((a,b)=>a.from-b.from)}
+function pruneQ(q){const lim=Date.now()-14*86400000;return (Array.isArray(q)?q:[]).filter(e=>e&&e.from>lim)}
+async function savePlan(fn){
+  const next=await safeUpdate(PLAN_API,o=>{o=(o&&typeof o==='object'&&!Array.isArray(o))?o:{};o.q=pruneQ(o.q);return fn(o)},'plan update',()=>({}));
+  PUBRAW=Object.assign({},PUBRAW||{},{q:next.q||[]});PUB=pickPub(PUBRAW);schedulePub();return next}
+function schedulePub(){clearTimeout(pubTimer);const now=Date.now();const nx=rsvList().find(e=>e.from>now);if(!nx)return;
+  const dt=nx.from-now;if(dt<2000000000)pubTimer=setTimeout(()=>{refreshPubView();schedulePub()},dt+1500)}
+function pubChanged(a){return JSON.stringify(a)!==JSON.stringify(PUB)}
+function refreshPubView(){const a=pickPub(PUBRAW);const ch=pubChanged(a);PUB=a;
+  if(ch&&route==='home'&&!shared&&!document.getElementById('viewer').classList.contains('on')){render();toast('今週の賛美が切り替わりました')}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible'||!CKEY||!SONGS.length)return;
+  refreshPubView();
+  /* 開きっぱなしの端末も、戻ってきたときに最新を取り直す（5分以上たっていたら） */
+  if(Date.now()-pubAt>300000){pubAt=Date.now();fetchPub().then(a=>{const ch=pubChanged(a);PUB=a;schedulePub();
+    if(ch&&route==='home'&&!shared&&!document.getElementById('viewer').classList.contains('on'))render()}).catch(()=>{})}});
+function sundayLabel(ms){const d=new Date(ms);if(d.getDay()===0&&d.getHours()>=12)d.setDate(d.getDate()+7);else d.setDate(d.getDate()+((7-d.getDay())%7));return `${d.getMonth()+1}月${d.getDate()}日(日) 礼拝`}
+function fmtWhen(ms){const d=new Date(ms);return (d.getMonth()+1)+'/'+d.getDate()+'('+'日月火水木金土'[d.getDay()]+') '+d.getHours()+':'+String(d.getMinutes()).padStart(2,'0')}
+function toLocalInput(ms){const d=new Date(ms),z=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+'T'+z(d.getHours())+':'+z(d.getMinutes())}
+function fromLocalInput(v){const m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(v||'');if(!m)return NaN;return new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]).getTime()}
+function openReserveSheet(){
+  if(!load(LS_PAT)){openReauthSheet();return}
+  if(!draft.l.length){toast('先に曲を選んでください');return}
+  const ed=RSVEDIT&&rsvList().find(e=>e.id===RSVEDIT)||null;
+  const sh=document.getElementById('sheet');
+  /* はじめの候補：次の日曜の13時（礼拝のあとに次の週の分へ切り替わる）。予約があれば、いちばん先の予約の1週間後 */
+  let from0;if(ed)from0=ed.from;else{const L=rsvList().filter(e=>e.from>Date.now());
+    if(L.length)from0=L[L.length-1].from+7*86400000;else{const d0=new Date();d0.setDate(d0.getDate()+((7-d0.getDay())%7));d0.setHours(13,0,0,0);if(d0.getTime()<=Date.now())d0.setDate(d0.getDate()+7);from0=d0.getTime()}}
+  const names=draft.l.map(id=>BYID[id]&&BYID[id].title).filter(Boolean);
+  const t0=ed?(ed.t==='今週の賛美'?'':ed.t):((draft.t&&draft.t!=='今週の賛美')?draft.t:'');
+  sh.innerHTML='<div class="sheetbox"><h3>📅 '+(ed?'予約を直す':'配信を予約する')+'</h3>'
+   +'<div class="sub">いま選んでいる '+draft.l.length+' 曲が、決めた日時になると自動で全員に出ます。予約は何件でも入れられます。</div>'
+   +'<div class="hint" style="margin:12px 0 4px;font-weight:700">いつから出すか</div><input class="search" id="rs_from" type="datetime-local" value="'+toLocalInput(from0)+'">'
+   +'<div class="hint" style="margin:10px 0 4px;font-weight:700">日付の表示</div><input class="search" id="rs_s" autocomplete="off" value="'+esc(ed?(ed.s||''):sundayLabel(from0))+'">'
+   +'<div class="hint" style="margin:10px 0 4px;font-weight:700">タイトル（入れなくてもOK）</div><input class="search" id="rs_t" autocomplete="off" placeholder="今週の賛美" value="'+esc(t0)+'">'
+   +'<div class="hint" style="margin-top:8px">'+esc(names.slice(0,4).join('・'))+(names.length>4?' ほか':'')+'</div>'
+   +'<button class="btn" id="rs_ok" style="margin-top:10px">'+(ed?'この予約を上書きする':'予約する')+'</button><button class="btn ghost" id="rs_ng" style="margin-top:8px">やめる</button></div>';
+  sh.classList.add('on');sh.onclick=e=>{if(e.target===sh)sh.classList.remove('on')};
+  const fi=document.getElementById('rs_from'),si=document.getElementById('rs_s');let touched=!!ed;
+  si.oninput=()=>{touched=true};
+  fi.onchange=()=>{const f=fromLocalInput(fi.value);if(!touched&&!isNaN(f))si.value=sundayLabel(f)};
+  document.getElementById('rs_ng').onclick=()=>sh.classList.remove('on');
+  document.getElementById('rs_ok').onclick=async function(){
+    const from=fromLocalInput(fi.value);
+    if(isNaN(from)){toast('日時を入れてください');return}
+    if(from<=Date.now()+60000){toast('これから先の日時にしてください（今すぐ出すなら「配信する」）');return}
+    const e={id:ed?ed.id:('r'+Date.now().toString(36)+Math.floor(Math.random()*1000)),t:document.getElementById('rs_t').value.trim()||'今週の賛美',s:si.value.trim(),l:draft.l.slice(),from:from,by:ROLENAME[role()]||'',at:Date.now()};
+    this.disabled=true;this.textContent='保存中…';
+    try{await savePlan(o=>{o.q=(o.q||[]).filter(x=>x.id!==e.id);o.q.push(e);return o});
+      RSVEDIT=null;sh.classList.remove('on');toast('予約しました：'+fmtWhen(from)+' から');drawRsv()}
+    catch(err){this.disabled=false;this.textContent=ed?'この予約を上書きする':'予約する';toast('予約に失敗しました：'+emsg(err))}
+  };
+}
+function drawRsv(){
+  const b=document.getElementById('rsvbox');if(!b)return;const now=Date.now();const L=rsvList().filter(e=>e.from>now);
+  const rb=document.getElementById('rsv');const edn=RSVEDIT&&L.find(e=>e.id===RSVEDIT);if(RSVEDIT&&!edn)RSVEDIT=null;
+  if(rb)rb.textContent=edn?('📅 この予約を上書きする（'+fmtWhen(edn.from)+' から）'):'📅 日時を決めて予約する';
+  b.innerHTML='';if(!L.length)return;
+  const h=document.createElement('div');h.className='secttl';h.textContent='予約中の配信（'+L.length+'件）';b.appendChild(h);
+  L.forEach(e=>{const el=document.createElement('div');el.className='song'+(e.id===RSVEDIT?' sel':'');
+    const names=(e.l||[]).map(id=>BYID[id]?BYID[id].title:null).filter(Boolean);
+    el.innerHTML='<div class="st"><div class="t">'+esc(fmtWhen(e.from))+' から</div><div class="s">'+esc(e.s||'')+((e.t&&e.t!=='今週の賛美')?'・'+esc(e.t):'')+'・'+names.length+'曲：'+esc(names.slice(0,3).join('・'))+(names.length>3?' ほか':'')+'</div></div><button class="pv" type="button">直す</button><button class="rm" type="button">取り消す</button>';
+    el.querySelector('.pv').onclick=()=>{draft.l=(e.l||[]).filter(id=>BYID[id]);draft.t=e.t||'今週の賛美';draft.s=e.s||draft.s;save(LS_DRAFT,draft);RSVEDIT=e.id;renderAdmin();window.scrollTo({top:0,behavior:'smooth'});setTimeout(()=>toast('この予約を読み込みました。曲を直して「この予約を上書きする」を押してください'),350)};
+    el.querySelector('.rm').onclick=async function(){if(!confirm(fmtWhen(e.from)+' からの予約を取り消しますか？'))return;this.disabled=true;
+      try{await savePlan(o=>{o.q=(o.q||[]).filter(x=>x.id!==e.id);return o});if(RSVEDIT===e.id)RSVEDIT=null;toast('予約を取り消しました');drawRsv()}
+      catch(err){this.disabled=false;toast('取り消しに失敗しました：'+emsg(err))}};
+    b.appendChild(el)});
 }
 async function publish(){
   const pat=load(LS_PAT);
@@ -369,17 +449,11 @@ async function publish(){
   if(!draft.l.length){toast('曲を選んでください');return}
   if(btn){btn.disabled=true;btn.textContent='配信中…'}
   try{
-    const ek=await crypto.subtle.importKey('raw',b64d(load(LS_K)),{name:'AES-GCM'},false,['encrypt']);
-    const iv=crypto.getRandomValues(new Uint8Array(12));
-    const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},ek,enc8(JSON.stringify({t:draft.t,s:draft.s,l:draft.l,d:Date.now()}))));
-    const full=new Uint8Array(12+ct.length);full.set(iv);full.set(ct,12);
-    const H={'Authorization':'Bearer '+pat,'Accept':'application/vnd.github+json'};
-    let sha=null;
-    try{const r=await fetch(REPO_API+'?ref=main&cb='+Date.now(),{headers:H,cache:'no-store'});if(r.ok)sha=(await r.json()).sha}catch(e){}
-    const res=await fetch(REPO_API,{method:'PUT',headers:H,body:JSON.stringify(Object.assign({message:'setlist update',content:btoa(b64e(full.buffer)),branch:'main'},sha?{sha:sha}:{}))});
-    if(!res.ok)throw new Error('HTTP '+res.status);
-    PUB={t:draft.t,s:draft.s,l:draft.l.slice(),d:Date.now()};
-    try{const D={t:draft.t,s:draft.s,l:draft.l.slice()};
+    const D={t:draft.t,s:draft.s,l:draft.l.slice()};
+    /* ws_reserve_v1：いまの分だけを差し替える（予約は plan.enc にあるので触らない） */
+    const cur=await safeUpdate(REPO_API,()=>({t:D.t,s:D.s,l:D.l,d:Date.now()}),'setlist update',()=>({}));
+    PUBRAW=Object.assign({},PUBRAW||{},cur);pubAt=Date.now();PUB=pickPub(PUBRAW);schedulePub();
+    try{
       await saveHist(h=>{const last=h[h.length-1];
         if(!(last&&(last.s===D.s||(JSON.stringify(last.l)===JSON.stringify(D.l)&&Date.now()-last.d<43200000)))){
           h.push({t:D.t,s:D.s,l:D.l,d:Date.now()});while(h.length>120)h.shift();
@@ -459,7 +533,7 @@ function renderHome(){
   const m=document.createElement('main');
   if(!cur){m.innerHTML=`<div class="center" style="min-height:40vh">今週の賛美はまだ配信されていません。</div>`;}
   else if(!cur.ids.length){m.innerHTML=`<div class="center" style="min-height:40vh">まだ曲がありません。</div>`;}
-  else{m.innerHTML=`<div class="hint">曲をタップで開きます。楽譜は下側タップで次のページ、上側で前のページ。</div>`;
+  else{m.innerHTML=`<div class="hint">曲をタップで開きます。楽譜は下側タップで次のページ、上側で前のページ。右上の ✎ で自分用のメモを手書きできます。</div>`;
     cur.ids.forEach((id,i)=>{const s=BYID[id];const el=document.createElement('div');el.className='song';
       el.innerHTML=`<div class="num">${i+1}</div><div class="st"><div class="t">${esc(s.title)}</div></div><div class="pg">${(PAGEINFO[s.id]||s.pages.length)}p</div><div class="chev">›</div>`;
       el.onclick=()=>openViewer(cur.ids,i);m.appendChild(el);});}
@@ -591,6 +665,7 @@ function renderAdmin(){
   m.innerHTML=`${YWARN}<input class="search" id="q" placeholder="曲名・歌詞で検索（例：Way / 御名 / 十字架）">
     <div class="seth"><div class="secttl">今週のセット（<span id="cnt">${draft.l.length}</span>曲）・「楽譜」で中身を確認</div><button class="rm" id="clr" type="button">全部外す</button></div><div id="selbox"></div>
     <button class="btn gold" id="pub">📡 配信する／変更を反映</button>
+    <button class="btn ghost" id="rsv" style="margin-top:8px">📅 日時を決めて予約する</button>
     <div class="hint" id="pubstate">${PUB?'配信中：'+esc(PUB.t)+'（'+PUB.l.length+'曲）':'まだ配信されていません'}</div>
     <div class="share">
       <div style="font-size:13px;font-weight:800">メンバーに送るURL（ずっと同じ）</div>
@@ -598,20 +673,26 @@ function renderAdmin(){
       <button class="btn ghost" id="copy" style="margin-top:0;padding:12px">URLをコピー</button>
       <div style="font-size:11.5px;color:var(--sub);margin-top:9px">配信後に曲を入れ替えても「配信する」を押し直せば全員に反映されます。配信から1週間経つと自動的に非表示になります。</div>
     </div>
+    <div id="rsvbox"></div>
     <div class="secttl">過去の配信</div><div id="histbox"><div class="hint">読み込み中…</div></div>
     <div class="secttl">ライブラリ（${SONGS.length}曲）・頭文字で選ぶ</div><div class="idxbar" id="idxbar"></div><div class="lib" id="libbox"></div>
     ${SETTINGS}`;
   app.appendChild(m);
   drawSel();drawLib('');
   (async()=>{try{if(HIST===null){HIST=await fetchHist();calcUsage();}
+    /* 予約で始まった配信も「過去の配信」と使用回数に入れる */
+    try{const now=Date.now();const near=(h,e)=>h.some(x=>x.s===e.s&&Math.abs((x.d||0)-e.from)<8*86400000);
+      const act=((PUBRAW&&PUBRAW.q)||[]).filter(e=>e&&e.l&&e.l.length&&e.from<=now&&!near(HIST||[],e));
+      if(act.length&&load(LS_PAT))await saveHist(h=>{act.forEach(e=>{if(!near(h,e))h.push({t:e.t,s:e.s,l:e.l.slice(),d:e.from})});h.sort((a,b)=>(a.d||0)-(b.d||0));while(h.length>120)h.shift();return h})}catch(e2){}
     drawHist();const qv=document.getElementById('q');drawLib(qv?qv.value:'');}catch(e){const hb=document.getElementById('histbox');if(hb)hb.innerHTML='<div class="hint">履歴を読み込めませんでした</div>'}})();
   const et=document.getElementById('etitle'),es=document.getElementById('esub');
   const commit=()=>{draft.t=et.textContent.trim()||'今週の賛美';draft.s=es.textContent.trim();save(LS_DRAFT,draft)};
   et.addEventListener('blur',commit);es.addEventListener('blur',commit);
   [et,es].forEach(x=>x.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();x.blur()}}));
-  document.getElementById('back').onclick=()=>{commit();route='home';render()};
+  document.getElementById('back').onclick=()=>{commit();RSVEDIT=null;route='home';render()};
   document.getElementById('q').oninput=e=>drawLib(e.target.value);
   document.getElementById('pub').onclick=()=>{commit();publish()};
+  document.getElementById('rsv').onclick=()=>{commit();openReserveSheet()};drawRsv();
   document.getElementById('clr').onclick=()=>{if(!draft.l.length)return;if(!confirm('今週のセットを空にしますか？（配信するまで全員には影響しません）'))return;draft.l=[];save(LS_DRAFT,draft);drawSel();drawLib(document.getElementById('q').value)};
   document.getElementById('copy').onclick=()=>{const u=document.getElementById('shareu').textContent;if(navigator.clipboard)navigator.clipboard.writeText(u).then(()=>toast('コピーしました'),()=>toast('長押しでコピーしてください'));else toast('長押しでコピーしてください')};
   if(isAdmin()){
@@ -781,8 +862,17 @@ function doneList(){return Object.keys(EDITS).filter(k=>EDITS[k]&&EDITS[k].ap&&n
 function editBadge(){const w=waitList().length,r=rejList().length;const a=[];if(w)a.push('承認待ち'+w);if(r&&canEditScore())a.push('差し戻し'+r);return a.length?'（'+a.join('・')+'）':''}
 
 /* 重ね書きの描画 */
+/* ws_pen_v1：自分用の手書き（この端末だけ）。曲ごとに {v:楽譜の版, ops:{頁:[線や文字]}} */
+const LS_PEN='ws_pen_v1',LS_PENSHOW='ws_penshow_v1';
+function penAll(){const o=load(LS_PEN);return (o&&typeof o==='object'&&!Array.isArray(o))?o:{}}
+function penRec(sid){return penAll()[sid]||null}
+function penOps(sid){if(load(LS_PENSHOW)===false)return null;const r=penRec(sid),s=BYID[sid];if(!r||!r.ops)return null;if(r.v&&s&&s.v&&r.v!==s.v)return null;return r.ops}
+function savePen(sid,ops){const a=penAll(),s=BYID[sid];if(ops&&nOps(ops))a[sid]={v:(s&&s.v)||'',ops:ops,at:Date.now()};else delete a[sid];
+  try{localStorage.setItem(LS_PEN,JSON.stringify(a));return true}catch(e){return false}}
 function activeOps(sid){
   if(ED&&ED.sid===sid)return ED.ops;
+  return sharedOps(sid)}
+function sharedOps(sid){
   const r=EDITS[sid];if(!r)return null;
   if(PREVIEW&&PREVIEW.sid===sid&&r.pd)return staleRec(sid,r.pd)?null:r.pd.ops;
   return (r.ap&&!staleRec(sid,r.ap)&&r.ap.ops)||null}
@@ -798,7 +888,12 @@ function opNode(o){
     t.setAttribute('fill',o.c||'#1a1a1a');
     t.setAttributeNS('http://www.w3.org/XML/1998/namespace','xml:space','preserve');
     t.textContent=o.s||'';return t}
+  if(o.t==='p'&&o.d&&o.d.length){const n=document.createElementNS(SVGNS,'path');
+    n.setAttribute('d',penD(o.d));n.setAttribute('fill','none');n.setAttribute('stroke',o.c||'#d0342c');n.setAttribute('stroke-width',o.w||2);
+    n.setAttribute('stroke-linecap','round');n.setAttribute('stroke-linejoin','round');
+    if(o.o){n.setAttribute('opacity',o.o);n.style.mixBlendMode='multiply'}return n}
   return null}
+function penD(d){let s='M'+d[0][0]+' '+d[0][1];for(let i=1;i<d.length;i++)s+='L'+d[i][0]+' '+d[i][1];if(d.length===1)s+='l0.1 0';return s}
 function tmpNode(t){const r=document.createElementNS(SVGNS,'rect');
   r.setAttribute('x',t.x);r.setAttribute('y',t.y);r.setAttribute('width',t.w);r.setAttribute('height',t.h);
   r.setAttribute('fill','#ffffff');r.setAttribute('stroke','#5b4b8a');r.setAttribute('stroke-width','2');r.setAttribute('stroke-dasharray','6 4');return r}
@@ -828,27 +923,34 @@ const FSZ=[26,34,44],CSZ=[17,25,30],CHORDC='#c63b2b'; /* ws_notefix_v1 */
 function snap(){return JSON.parse(JSON.stringify(ED.ops))}
 function pushUndo(){ED.undo.push(snap());if(ED.undo.length>25)ED.undo.shift()}
 function editChooserSheet(){
-  const s=cur();if(!s)return;
-  const sh=document.getElementById('sheet');
-  sh.innerHTML='<div class="sheetbox"><h3>✎ この楽譜を直す</h3><div class="sub">'+esc(s.title)+'</div>'
-   +'<button class="btn" id="ed_ch" style="margin-top:10px">\u{1F3BC} コードを置く<div style="font-size:11.5px;font-weight:400;opacity:.85;margin-top:2px">コードを選んで、置きたい所を押すだけ</div></button>'
-   +'<button class="btn ghost" id="ed_in" style="margin-top:8px">そのほかを直す<div style="font-size:11.5px;font-weight:400;opacity:.85;margin-top:2px">歌詞やコードを 消す／書き換える／動かす</div></button>'
+  const s=cur();if(!s)return;const ce=canEditScore();
+  const sh=document.getElementById('sheet');const sub=' style="font-size:11.5px;font-weight:400;opacity:.85;margin-top:2px"';
+  sh.innerHTML='<div class="sheetbox"><h3>✎ 書き込む・直す</h3><div class="sub">'+esc(s.title)+'</div>'
+   +'<button class="btn" id="ed_pen" style="margin-top:10px">✏️ 手書きで書き込む（自分用）<div'+sub+'>前奏の音やメモなど。この端末だけに残ります</div></button>'
+   +(ce?'<button class="btn ghost" id="ed_penall" style="margin-top:8px">✏️ 手書きで書き込む（全員に見せる）<div'+sub+'>'+(canApprove()?'完了すると全員の楽譜に出ます':'完了すると選曲担当の確認に回ります')+'</div></button>'
+     +'<button class="btn ghost" id="ed_ch" style="margin-top:8px">\u{1F3BC} コードを置く<div'+sub+'>コードを選んで、置きたい所を押すだけ</div></button>'
+     +'<button class="btn ghost" id="ed_in" style="margin-top:8px">そのほかを直す<div'+sub+'>歌詞やコードを 消す／書き換える／動かす</div></button>':'')
    +'<button class="btn ghost" id="ed_mac" style="margin-top:8px">🎼 Macの清書ツールで直す</button>'
    +'<button class="btn ghost" id="ed_x" style="margin-top:8px">やめる</button></div>';
   sh.classList.add('on');
   sh.onclick=e=>{if(e.target===sh)sh.classList.remove('on')};
-  document.getElementById('ed_x').onclick=()=>sh.classList.remove('on');
-  document.getElementById('ed_mac').onclick=()=>{sh.classList.remove('on');editorChooser(s.id)};
-  document.getElementById('ed_in').onclick=()=>{sh.classList.remove('on');startScoreEdit()};
-  document.getElementById('ed_ch').onclick=()=>{sh.classList.remove('on');startScoreEdit('c')};
+  const on=(id,fn)=>{const b=document.getElementById(id);if(b)b.onclick=()=>{sh.classList.remove('on');fn()}};
+  on('ed_x',()=>{});on('ed_mac',()=>editorChooser(s.id));on('ed_in',()=>startScoreEdit());on('ed_ch',()=>startScoreEdit('c'));
+  on('ed_pen',()=>startScoreEdit('p',true));on('ed_penall',()=>startScoreEdit('p'));
 }
-function startScoreEdit(tool0){
+function startScoreEdit(tool0,personal){
   const s=cur();if(!s)return;
-  if(!canEditScore()){toast('この操作は司書と管理者だけです');return}
-  if(!load(LS_PAT)){toast('この端末では保存できません。合言葉を入れ直してみてください');return}
-  const r=EDITS[s.id]||{};
-  const base=JSON.parse(JSON.stringify((r.pd&&!staleRec(s.id,r.pd)&&r.pd.ops)||(r.ap&&!staleRec(s.id,r.ap)&&r.ap.ops)||{}));
-  ED={sid:s.id,ops:base,tool:tool0||'r',fs:1,undo:[],tmp:null,chord:'',cfs:{}};
+  let base={};
+  if(personal){const r=penRec(s.id);
+    if(r&&r.ops){if(r.v&&s.v&&r.v!==s.v){if(confirm('この曲は楽譜が新しくなりました。前の書き込みを引き継ぎますか？\n（位置がずれているかもしれません。キャンセルを押すと新しく書き始めます）'))base=r.ops}else base=r.ops}
+    base=JSON.parse(JSON.stringify(base));
+  }else{
+    if(!canEditScore()){toast('この操作は司書と管理者だけです');return}
+    if(!load(LS_PAT)){toast('この端末では保存できません。合言葉を入れ直してみてください');return}
+    const r=EDITS[s.id]||{};
+    base=JSON.parse(JSON.stringify((r.pd&&!staleRec(s.id,r.pd)&&r.pd.ops)||(r.ap&&!staleRec(s.id,r.ap)&&r.ap.ops)||{}));
+  }
+  ED={sid:s.id,ops:base,tool:tool0||(personal?'p':'r'),fs:1,undo:[],tmp:null,chord:'',cfs:{},personal:!!personal,pen:{c:0,w:1},finger:true,sawPen:false};
   s.pages.forEach((pp,pi)=>{decImg(pp).then(u=>chordSize(pp,u)).then(v=>{if(ED&&ED.sid===s.id&&v)ED.cfs[pi]=v}).catch(()=>{})});
   PREVIEW=null;
   window.__forceNoSplit=true;buildViewer();
@@ -858,6 +960,7 @@ function startScoreEdit(tool0){
   [...document.querySelectorAll('#stage svg.ovl')].forEach(function(o){o.remove()});
   buildEditBars();drawOverlays();
   if(ED.tool==='c'){if(chordChips().length)toast('下でコードを選んで、置きたい所を押してください');else openChordSheet()}
+  else if(ED.tool==='p')toast('そのまま書けます（Apple Pencil でも指でも）');
   else toast('直したいところを操作してください');
 }
 function endScoreEdit(){
@@ -924,27 +1027,36 @@ function openChordSheet(){
   document.getElementById('ch_ok').onclick=ok;free.onkeydown=e=>{if(e.key==='Enter')ok()};
   paint();
 }
+const PENC=[['#d0342c','赤'],['#1f5fd0','青'],['#1a1a1a','黒'],['#ffd400','蛍光']];
+function syncTouch(){const pan=!!(ED&&ED.tool==='p'&&ED.sawPen&&!ED.finger);document.querySelectorAll('#stage svg.ovl').forEach(o=>{o.style.touchAction=pan?'pan-y':'none'})}
 function buildEditBars(){
   const s=BYID[ED.sid];
   let top=document.getElementById('edtop');
   if(!top){top=document.createElement('div');top.id='edtop';top.className='edtop';V.appendChild(top)}
-  const TIP={r:'置き換え：間違いを指でなぞる → 正しい文字を入れる',e:'消す：消したい範囲を指でなぞる',t:'歌詞を書く：置きたい場所を押す',c:ED.chord?('コードを置く：置きたい所を押すと「'+ED.chord+'」が入ります（続けて置けます）'):'コードを置く：下でコードを選んでから、置きたい所を押す',m:'動かす：置いたものを指でずらす',x:'取る：置いた文字やコードを押すと取り除けます'};
-  top.textContent='✎ '+s.title+'　'+(TIP[ED.tool]||'');
+  const TIP={p:(ED.sawPen&&!ED.finger)?'ペン：Apple Pencil で書けます。指はスクロールです':'ペン：そのまま書けます',r:'置き換え：間違いを指でなぞる → 正しい文字を入れる',e:'消す：消したい範囲を指でなぞる',t:(ED.personal?'文字':'歌詞を書く')+'：置きたい場所を押す',c:ED.chord?('コードを置く：置きたい所を押すと「'+ED.chord+'」が入ります（続けて置けます）'):'コードを置く：下でコードを選んでから、置きたい所を押す',m:'動かす：置いたものを指でずらす',x:ED.personal?'消しゴム：消したい線や文字をなぞる':'取る：置いた線・文字・コードを押すと取り除けます'};
+  top.textContent=(ED.personal?'✏️ 自分用の書き込み（この端末だけ）　':'✎ '+s.title+'　')+(TIP[ED.tool]||'');
   let bar=document.getElementById('edbar');
   if(!bar){bar=document.createElement('div');bar.id='edbar';bar.className='edbar';V.appendChild(bar)}
-  const T=[['c','コードを置く'],['r','置き換え'],['e','消す'],['t','歌詞を書く'],['m','動かす'],['x','取る']];
-  const chips=ED.tool==='c'?('<div class="edch">'+chordChips().map(function(c){return '<button data-ch="'+esc(c)+'"'+(c===ED.chord?' class="on"':'')+'>'+esc(c)+'</button>'}).join('')+'<button data-chmore="1">＋ ほかのコード</button></div>'):'';
+  const T=ED.personal?[['p','ペン'],['x','消しゴム'],['t','文字'],['c','コード'],['m','動かす']]
+                     :[['c','コードを置く'],['p','ペン'],['r','置き換え'],['e','消す'],['t','歌詞を書く'],['m','動かす'],['x','取る']];
+  let chips='';
+  if(ED.tool==='c')chips='<div class="edch">'+chordChips().map(function(c){return '<button data-ch="'+esc(c)+'"'+(c===ED.chord?' class="on"':'')+'>'+esc(c)+'</button>'}).join('')+'<button data-chmore="1">＋ ほかのコード</button></div>';
+  if(ED.tool==='p')chips='<div class="edch">'+PENC.map(function(c,i){return '<button data-pc="'+i+'"'+(i===ED.pen.c?' class="on"':'')+'><span style="display:inline-block;width:14px;height:14px;border-radius:50%;border:1.5px solid #fff;background:'+c[0]+';vertical-align:-2px"></span> '+c[1]+'</button>'}).join('')
+    +'<button data-pw="1">太さ：'+['細','中','太'][ED.pen.w]+'</button><button data-pf="1">指で書く：'+(ED.finger?'オン':'オフ')+'</button></div>';
   bar.innerHTML=chips+T.map(function(t){return '<button data-t="'+t[0]+'"'+(ED.tool===t[0]?' class="on"':'')+'>'+t[1]+'</button>'}).join('')
-    +'<button data-z="1">文字の大きさ：'+['小','中','大'][ED.fs]+'</button>'
+    +((ED.tool==='t'||ED.tool==='c'||ED.tool==='r')?'<button data-z="1">文字の大きさ：'+['小','中','大'][ED.fs]+'</button>':'')
     +'<button data-p="-1">◀ 前の頁</button><button data-p="1">次の頁 ▶</button>'
     +'<button data-u="1">取り消す</button>'
-    +'<button class="go" data-ok="1">'+(canApprove()?'完了（すぐ全員に反映）':'完了（確認をお願いする）')+'</button>'
+    +'<button class="go" data-ok="1">'+(ED.personal?'完了（この端末に保存）':(canApprove()?'完了（すぐ全員に反映）':'完了（確認をお願いする）'))+'</button>'
     +'<button data-x="1">やめる</button>';
   bar.querySelectorAll('button').forEach(function(b){b.onclick=function(e){
     e.stopPropagation();const d=b.dataset;
     if(d.ch){useChord(d.ch);return}
     if(d.chmore){openChordSheet();return}
-    if(d.t){ED.tool=d.t;buildEditBars();return}
+    if(d.pc){ED.pen.c=+d.pc;buildEditBars();return}
+    if(d.pw){ED.pen.w=(ED.pen.w+1)%3;buildEditBars();return}
+    if(d.pf){ED.finger=!ED.finger;buildEditBars();syncTouch();toast(ED.finger?'指でも書けます（スクロールは「前の頁／次の頁」で）':'指はスクロール、書くのはペンだけになります');return}
+    if(d.t){ED.tool=d.t;buildEditBars();syncTouch();return}
     if(d.z){ED.fs=(ED.fs+1)%3;buildEditBars();return}
     if(d.p){edTurn(+d.p);return}
     if(d.u){if(ED.undo.length){ED.ops=ED.undo.pop();drawOverlays();buildEditBars()}else toast('これ以上は戻せません');return}
@@ -957,26 +1069,50 @@ function edTurn(d){const st=document.getElementById('stage');if(!st)return;
   let p=curPage()-1+d;if(p<0)p=0;if(p>=sl.length)p=sl.length-1;st.scrollTop=sl[p].offsetTop}
 function uxy(ov,ev){const r=ov.getBoundingClientRect();const vb=ov.getAttribute('viewBox').split(' ');
   return {x:Math.round((ev.clientX-r.left)/r.width*1000),y:Math.round((ev.clientY-r.top)/r.height*(+vb[3]))}}
+function uxyf(ov,ev){const r=ov.getBoundingClientRect();const vb=ov.getAttribute('viewBox').split(' ');
+  return [Math.round((ev.clientX-r.left)/r.width*10000)/10,Math.round((ev.clientY-r.top)/r.height*(+vb[3])*10)/10]}
+function segDist(px,py,a,b){const dx=b[0]-a[0],dy=b[1]-a[1];const l2=dx*dx+dy*dy;let t=l2?((px-a[0])*dx+(py-a[1])*dy)/l2:0;t=Math.max(0,Math.min(1,t));return Math.hypot(px-(a[0]+t*dx),py-(a[1]+t*dy))}
+function simplify(d,eps){if(d.length<3)return d;let mx=0,ix=0;const a=d[0],b=d[d.length-1];
+  for(let i=1;i<d.length-1;i++){const q=segDist(d[i][0],d[i][1],a,b);if(q>mx){mx=q;ix=i}}
+  if(mx<=eps)return [a,b];return simplify(d.slice(0,ix+1),eps).slice(0,-1).concat(simplify(d.slice(ix),eps))}
 function bindEdit(ov,sl,pi){
   let st=null;
+  /* ペン：Apple Pencil を一度でも使ったら、指は書かずにスクロールに回す（手のひらで線が入らないように） */
+  const drawOK=function(ev){if(ev.pointerType==='pen'){if(!ED.sawPen){ED.sawPen=true;ED.finger=false;buildEditBars();syncTouch();toast('ペンで書けます。指はスクロールになります')}return true}return !(ED.sawPen&&!ED.finger)};
+  const tguard=function(e){if(!ED||ED.tool!=='p')return;const sty=[].some.call(e.changedTouches||[],function(t){return t.touchType==='stylus'});if(sty||!(ED.sawPen&&!ED.finger))e.preventDefault()};
+  ov.addEventListener('touchstart',tguard,{passive:false});ov.addEventListener('touchmove',tguard,{passive:false});
+  const eraseAt=function(p,strokesOnly){const i=hitOp(pi,p);if(i<0)return false;if(strokesOnly&&ED.ops[pi][i].t!=='p')return false;
+    if(st&&st.erase&&!st.did){pushUndo();st.did=true}else if(!st)pushUndo();ED.ops[pi].splice(i,1);drawOverlays();return true};
   ov.addEventListener('pointerdown',function(ev){
     if(!ED)return;ev.preventDefault();ev.stopPropagation();
     const p=uxy(ov,ev);if(!isFinite(p.x)||!isFinite(p.y)){toast('楽譜の読み込みが終わってから押してください');return}
+    if(ED.tool==='p'){if(!drawOK(ev))return;
+      pushUndo();const mk=ED.pen.c===3;const o={t:'p',c:PENC[ED.pen.c][0],w:(mk?[10,16,24]:[2,3.5,6])[ED.pen.w],d:[uxyf(ov,ev)]};if(mk)o.o=.4;
+      (ED.ops[pi]=ED.ops[pi]||[]).push(o);drawOverlays();st={pen:o,node:ov.lastChild};try{ov.setPointerCapture(ev.pointerId)}catch(e){}return}
     if(ED.tool==='e'||ED.tool==='r'){st={x:p.x,y:p.y};ED.tmp={pi:pi,x:p.x,y:p.y,w:0,h:0};ov.setPointerCapture(ev.pointerId);drawOverlays();return}
     if(ED.tool==='m'){const i=hitOp(pi,p);if(i<0){toast('動かすものを長めに押してください');return}
       pushUndo();st={i:i,p:p};ov.setPointerCapture(ev.pointerId);return}
-    if(ED.tool==='x'){const i=hitOp(pi,p);if(i<0){toast('置いた文字やコードの上を押してください');return}pushUndo();ED.ops[pi].splice(i,1);drawOverlays();return}
+    if(ED.tool==='x'){st={erase:true,did:false};try{ov.setPointerCapture(ev.pointerId)}catch(e){}
+      if(!eraseAt(p,false)&&ev.pointerType==='mouse'&&!ev.buttons)toast('消したい線や文字の上を押してください');return}
     if(ED.tool==='c'){if(!ED.chord){openChordSheet();return}placeChord(pi,p);return}
     openTextSheet(pi,p,false);
   });
   ov.addEventListener('pointermove',function(ev){
     if(!ED||!st)return;ev.preventDefault();
+    if(st.pen){const evs=(ev.getCoalescedEvents&&ev.getCoalescedEvents())||[];const d=st.pen.d;
+      (evs.length?evs:[ev]).forEach(function(e2){const q=uxyf(ov,e2);const l=d[d.length-1];if(isFinite(q[0])&&isFinite(q[1])&&Math.abs(q[0]-l[0])+Math.abs(q[1]-l[1])>=0.8)d.push(q)});
+      if(st.node&&st.node.parentNode)st.node.setAttribute('d',penD(d));return}
     const p=uxy(ov,ev);
+    if(st.erase){eraseAt(p,true);return}
     if(ED.tool==='e'||ED.tool==='r'){ED.tmp={pi:pi,x:Math.min(st.x,p.x),y:Math.min(st.y,p.y),w:Math.abs(p.x-st.x),h:Math.abs(p.y-st.y)};drawOverlays();return}
-    if(ED.tool==='m'){const o=ED.ops[pi][st.i];o.x+=p.x-st.p.x;o.y+=p.y-st.p.y;st.p=p;drawOverlays()}
+    if(ED.tool==='m'){const o=ED.ops[pi][st.i];const dx=p.x-st.p.x,dy=p.y-st.p.y;
+      if(o.t==='p')o.d.forEach(function(q){q[0]=Math.round((q[0]+dx)*10)/10;q[1]=Math.round((q[1]+dy)*10)/10});else{o.x+=dx;o.y+=dy}
+      st.p=p;drawOverlays()}
   });
   const up=function(ev){
     if(!ED||!st)return;
+    if(st.pen){st.pen.d=simplify(st.pen.d,0.45);st=null;drawOverlays();return}
+    if(st.erase){st=null;return}
     if(ED.tool==='e'||ED.tool==='r'){const t=ED.tmp;ED.tmp=null;
       if(t&&t.w>4&&t.h>4){
         if(ED.tool==='r'){drawOverlays();st=null;openTextSheet(pi,{x:t.x+2,y:t.y+t.h-5},null,{t:'e',x:t.x,y:t.y,w:t.w,h:t.h});return}
@@ -985,10 +1121,12 @@ function bindEdit(ov,sl,pi){
     st=null};
   ov.addEventListener('pointerup',up);ov.addEventListener('pointercancel',up);
   ov.addEventListener('click',function(ev){ev.stopPropagation()});
+  syncTouch();
 }
 function hitOp(pi,p){const l=ED.ops[pi]||[];
   for(let i=l.length-1;i>=0;i--){const o=l[i];
-    if(o.t==='e'){if(p.x>=o.x-6&&p.x<=o.x+o.w+6&&p.y>=o.y-6&&p.y<=o.y+o.h+6)return i}
+    if(o.t==='p'){const th=7+(o.w||2)/2,d=o.d||[];for(let k=0;k<d.length;k++){if(segDist(p.x,p.y,d[k],d[k+1]||d[k])<=th)return i}}
+    else if(o.t==='e'){if(p.x>=o.x-6&&p.x<=o.x+o.w+6&&p.y>=o.y-6&&p.y<=o.y+o.h+6)return i}
     else{const w=(o.s||'').length*o.fs*0.62;if(p.x>=o.x-10&&p.x<=o.x+w+10&&p.y>=o.y-o.fs-6&&p.y<=o.y+8)return i}}
   return -1}
 function openTextSheet(pi,p,bold,pre){
@@ -1014,6 +1152,9 @@ function openTextSheet(pi,p,bold,pre){
 async function finishScoreEdit(){
   const sid=ED.sid,s=BYID[sid];
   for(const k in ED.ops)if(!ED.ops[k].length)delete ED.ops[k];
+  if(ED.personal){
+    if(!savePen(sid,ED.ops)){toast('保存できませんでした（端末の空きが足りないかもしれません）');return}
+    endScoreEdit();toast('書き込みを保存しました（この端末だけ）');return}
   const who=ROLENAME[role()]||'メンバー',now=Date.now(),ops=ED.ops,direct=canApprove();
   const btnbar=document.getElementById('edbar');if(btnbar)btnbar.querySelectorAll('button').forEach(b=>b.disabled=true);
   try{await saveEdits(sid,r=>{r=r||{};
@@ -1175,6 +1316,9 @@ async function bakeOps(p,url,list){
     if(o.t==='e'){c.fillStyle='#ffffff';c.fillRect(o.x*k,o.y*k,o.w*k,o.h*k)}
     else if(o.t==='t'){c.font=(o.b?700:400)+' '+(o.fs*k)+'px '+(o.b?"'Helvetica Neue',Helvetica,Arial,sans-serif":"'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP','Yu Gothic',sans-serif");
       c.fillStyle=o.c||'#1a1a1a';c.textBaseline='alphabetic';c.fillText(o.s||'',o.x*k,o.y*k)}
+    else if(o.t==='p'&&o.d&&o.d.length){c.save();if(o.o){c.globalAlpha=o.o;c.globalCompositeOperation='multiply'}
+      c.strokeStyle=o.c||'#d0342c';c.lineWidth=(o.w||2)*k;c.lineCap='round';c.lineJoin='round';c.beginPath();c.moveTo(o.d[0][0]*k,o.d[0][1]*k);
+      for(let i=1;i<o.d.length;i++)c.lineTo(o.d[i][0]*k,o.d[i][1]*k);if(o.d.length===1)c.lineTo(o.d[0][0]*k+0.2,o.d[0][1]*k);c.stroke();c.restore()}
   }
   const blob=await new Promise(r=>cv.toBlob(r,'image/webp',0.92));if(!blob)throw 0;
   const u=URL.createObjectURL(blob);bakeCache[key]=u;return{key:key,url:u}}
@@ -1234,7 +1378,7 @@ function buildViewer(){
   window.__twoAtBuild=!!load(LS_TWO)&&window.innerWidth>window.innerHeight&&s.pages.length>1;window.__sizeAtBuild=innerWidth+'x'+innerHeight;
   const nt=PAGEINFO[s.id]||0;const slides=s.pages.map((p,pi)=>`<div class="slide fit load${(nt&&pi>=nt)?' scan':''}${pageSelClass(s.id,pi)}"><img data-enc="${p}" alt="">${s.pages.length>1?`<div class="pageflag">${pi+1} / ${s.pages.length}</div>`:''}</div>`).join('');
   V.innerHTML=`<div class="stage" id="stage">${slides}<div class="edge l" id="el"></div><div class="edge r" id="er"></div></div>
-   <button class="vclose" id="vx" aria-label="閉じる">✕</button><button class="vgear" id="vgear" aria-label="表示の設定">⚙</button>${isStaff()?'<button class="vgear vedit" id="vedit" aria-label="この楽譜を直す">✎</button>':''}${s.pages.length>1?'<button class="turnbtn hid" id="vtwo">\u898b\u958b\u304d</button>':''}${(nt&&s.pages.length>nt)?'<button class="turnbtn hid" id="vscan" style="left:auto;right:66px">\u4e94\u7dda\u8b5c</button>':''}${isStaff()?'<button class="flagbtn" id="vflag" aria-label="メモ">🚩</button>':''}`;
+   <button class="vclose" id="vx" aria-label="閉じる">✕</button><button class="vgear" id="vgear" aria-label="表示の設定">⚙</button><button class="vgear vedit" id="vedit" aria-label="書き込む・直す">✎</button>${s.pages.length>1?'<button class="turnbtn hid" id="vtwo">\u898b\u958b\u304d</button>':''}${(nt&&s.pages.length>nt)?'<button class="turnbtn hid" id="vscan" style="left:auto;right:66px">\u4e94\u7dda\u8b5c</button>':''}${isStaff()?'<button class="flagbtn" id="vflag" aria-label="メモ">🚩</button>':''}`;
   const stage=document.getElementById('stage');stage.scrollTop=0;stage.classList.toggle('inv',!!window.__invMode);
   (function(){var msg=null;   if(PREVIEW&&PREVIEW.sid===s.id)msg='確認中：直したあとの表示です（まだ全員には出ていません）';   else if(isStaff()&&EDITS[s.id]&&EDITS[s.id].pd)msg=EDITS[s.id].pd.rej?'差し戻された修正があります（「楽譜の修正」で確かめてください）':'承認待ちの修正があります（まだ反映されていません）';   if(msg){var pb=document.createElement('div');pb.className='edtop pv';pb.textContent=msg;V.appendChild(pb)}})();
   hydrate();
@@ -1258,7 +1402,7 @@ function buildViewer(){
   if(vg){vg.onclick=e=>{e.stopPropagation();openViewSettings()};}
   const ve=document.getElementById('vedit');
   if(ve){ve.onclick=e=>{e.stopPropagation();const s=cur();if(!s)return;
-    if(canEditScore())editChooserSheet();else editorChooser(s.id)};}
+    if(isStaff())editChooserSheet();else startScoreEdit('p',true)};}
 
 
   const sb=document.getElementById('vscan');
@@ -1316,7 +1460,10 @@ function openNoteSheet(){
 }
 function bindZoom(img){img.addEventListener('click',()=>{if(ED)return;const n=Date.now();if(n-(img._lt||0)<300)zoom(img);img._lt=n})}
 async function hydrate(){const imgs=[...document.querySelectorAll('#stage img[data-enc]')];const s=cur();const st=document.getElementById('stage');
-  const raw=!!ED||!!window.__forceNoSplit;const ops=(s&&activeOps(s.id))||{};const nt=(s&&PAGEINFO[s.id])||0;
+  const raw=!!ED||!!window.__forceNoSplit;const nt=(s&&PAGEINFO[s.id])||0;
+  /* 焼き込むもの：ふだんは「全員向けの直し＋自分の書き込み」。自分用に書いている間は、全員向けの直しだけ下に敷く */
+  const shr=(s&&sharedOps(s.id))||{},mine=(s&&!ED&&penOps(s.id))||{},ops={},bakeRaw=!!(ED&&ED.personal);
+  if(s)s.pages.forEach(function(_,i){const L=ED?(ED.personal?(shr[i]||[]):[]):(shr[i]||[]).concat(mine[i]||[]);if(L.length)ops[i]=L});
   for(let tries=0;tries<30&&st.clientHeight===0;tries++)await new Promise(r=>requestAnimationFrame(r));
   setSH();
   for(const im of imgs){const p=im.getAttribute('data-enc');const sl=im.parentElement;const pi=[...st.querySelectorAll('.slide')].indexOf(sl);
@@ -1324,7 +1471,7 @@ async function hydrate(){const imgs=[...document.querySelectorAll('#stage img[da
     try{let url=await decImg(p),key=p,baked=false;
       /* ws_chordpad_v1：書き込み（コードや直し）は頁の絵に焼き込んでから、ふつうの頁と同じに扱う。
          こうすると書き込みのある頁も、余白を切って段ごとに大きく出せる（前は元の頁のまま小さく出していた） */
-      if(!raw&&ops[pi]&&ops[pi].length){try{const bk=await bakeOps(p,url,ops[pi]);url=bk.url;key=bk.key;baked=true}catch(eb){}}
+      if((!raw||bakeRaw)&&ops[pi]&&ops[pi].length){try{const bk=await bakeOps(p,url,ops[pi]);url=bk.url;key=bk.key;baked=true}catch(eb){}}
       let done=false;
       if(!raw&&(baked||!(ops[pi]&&ops[pi].length))&&st.contains(sl)){
         const a=await analyzePage(key,url);
@@ -1399,6 +1546,8 @@ function openViewSettings(){
     <label><input type="checkbox" id="vs_split"${splitWanted()?' checked':''}><div>大きく見えるように区切って並べてよい<div class="d">2段組を段ごとに、横向きのスマホでは上下に区切って、1画面ずつ大きく出します（そのほうが大きくなるときだけ）。オフにすると1ページずつ</div></div></label>${(()=>{if(!s)return '';const sel=pageSel(s.id);return `<div class="pl"><div class="h">この曲で表示するページ（この端末だけ）</div>`+s.pages.map((p,i)=>`<label><input type="checkbox" class="vs_pg" data-i="${i}"${(sel?sel.includes(i):(!nt||i<nt||scan))?' checked':''}><div>${i+1}. ${pageLabel(nt,i,s.pages.length)}</div></label>`).join('')+`</div>`})()}
     </div>
     <div class="hint" style="margin-top:10px">ページ送り：画面の下側タップ＝次、上側＝前。足踏みペダルや矢印キーでも送れます。</div>
+    <div style="margin-top:8px"><label><input type="checkbox" id="vs_pen"${load(LS_PENSHOW)!==false?' checked':''}><div>自分の書き込みを表示する<div class="d">✎ で書いた自分用のメモ（この端末だけに残っています）</div></div></label></div>
+    ${(s&&penRec(s.id))?'<button class="btn ghost" id="vs_pendel" style="margin-top:8px">この曲の自分の書き込みを消す</button>':''}
     <button class="btn" id="vs_ok" style="margin-top:8px">閉じる</button></div>`;
   sh.classList.add('on');
   document.getElementById('vs_two').onchange=e=>{save(LS_TWO,e.target.checked);if(window.__ws_two)window.__ws_two()};
@@ -1410,6 +1559,8 @@ function openViewSettings(){
     if(!arr.length){cb.checked=true;return;}
     setPageSel(s.id,arr,s.pages.length);applyPageSel();}});
 document.getElementById('vs_ok').onclick=()=>sh.classList.remove('on');
+  document.getElementById('vs_pen').onchange=e=>{save(LS_PENSHOW,e.target.checked);rebuildKeep()};
+  {const pd=document.getElementById('vs_pendel');if(pd)pd.onclick=()=>{if(!confirm('この曲に自分で書いた書き込みを全部消しますか？（元に戻せません）'))return;savePen(s.id,null);sh.classList.remove('on');rebuildKeep();toast('書き込みを消しました')}}
   sh.onclick=e=>{if(e.target===sh)sh.classList.remove('on')};
 }
 function toggleDark(){dark=!dark;document.documentElement.classList.toggle('dark',dark);save(LS_DARK,dark);const b=document.getElementById('toDark');if(b)b.textContent=dark?'☀️':'🌙'}
